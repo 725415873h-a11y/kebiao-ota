@@ -219,7 +219,7 @@ body { background: var(--card); }
 .course.hidden-course { opacity: .35; }
 
 /* 今日 */
-#today-head { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; border: 1px solid var(--line); }
+#today-head { background: var(--card); border-radius: var(--radius); padding: 14px 0 6px; margin-bottom: 10px; border: none; }
 #today-head .big { font-size: 20px; font-weight: 800; }
 #today-head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 #next-card {
@@ -231,8 +231,8 @@ body { background: var(--card); }
 #next-card .sub { font-size: 13px; opacity: .95; margin-top: 4px; }
 #next-card.none { background: #8a94a3; }
 .titem {
-  background: var(--card); border-radius: var(--radius); padding: 12px 14px;
-  margin-bottom: 8px; display: flex; gap: 12px; align-items: center; border: 1px solid var(--line);
+  background: var(--card); border-radius: var(--radius); padding: 12px 0;
+  margin-bottom: 8px; display: flex; gap: 12px; align-items: center; border: none;
 }
 .titem .time { font-size: 13px; font-weight: 700; min-width: 86px; color: var(--primary); }
 .titem .info { flex: 1; min-width: 0; }
@@ -242,7 +242,7 @@ body { background: var(--card); }
 .titem.now { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 
 /* 设置 */
-.card { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; border: 1px solid var(--line); }
+.card { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; border: none; box-shadow: none; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
 .card h3 .tag2 { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 6px; }
 .card .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
