@@ -61,11 +61,6 @@
     <!-- 设置视图 -->
     <section id="view-settings" class="view" hidden>
       <div class="card">
-        <h3>班级过滤 <span class="tag2">年级课程模式</span></h3>
-        <div id="classchips" class="chips"></div>
-        <p class="hint">「年级课程」模式下按班级过滤分班课程；不分班课程始终显示。</p>
-      </div>
-      <div class="card">
         <h3>我的课程 <button id="selall" class="linkbtn">全选</button> <button id="selnone" class="linkbtn">清空</button></h3>
         <p class="hint" style="margin:0 0 8px">「我的课程」模式下只显示勾选的课程；点课表卡片也可添加。快速生成：</p>
         <div id="minegen" class="chips" style="margin-bottom:8px"></div>
@@ -84,11 +79,6 @@
         </label>
         <button id="testnotify" class="btn">测试通知</button>
         <p class="hint">应用打开时会提前提醒；导出日历后系统日历也会提醒（更可靠）。</p>
-      </div>
-      <div class="card">
-        <h3>节次时间</h3>
-        <div id="periodtimes"></div>
-        <button id="resetperiods" class="btn">恢复默认</button>
       </div>
       <div class="card">
         <h3>导出日历</h3>
@@ -110,9 +100,8 @@
       <div class="card">
         <h3>软件更新</h3>
         <div id="otastatus" class="hint" style="margin:0 0 8px"></div>
-        <label class="row"><span>更新源</span><input type="text" id="otaurl" class="textinput" placeholder="http://192.168.x.x:8787"></label>
         <button id="otacheck" class="btn primary">检查更新</button>
-        <p class="hint">更新源支持 GitHub Pages·jsDelivr / gitee 等公网静态目录，需包含 ota/manifest.json。UI 更新免安装直接生效；若源内含新版 APK（manifest.json 的 apk 字段）会下载并拉起安装。</p>
+        <p class="hint">更新源已内置（GitHub·jsDelivr）。UI 更新免安装直接生效；若源内发布新版 APK（manifest.json 的 apk 字段）会下载并拉起安装。</p>
       </div>
       <div class="card">
         <h3>数据</h3>

@@ -10,7 +10,7 @@
     5: ['13:30', '14:15'], 6: ['14:20', '15:05'], 7: ['15:25', '16:10'], 8: ['16:15', '17:00'],
     9: ['18:30', '19:15'], 10: ['19:20', '20:05'], 11: ['20:10', '20:55'], 12: ['21:00', '21:45']
   };
-  var PERIODS_VER = 2; // 节次时间版本：升级默认时间后迁移旧缓存
+  var OTA_URL = 'https://gcore.jsdelivr.net/gh/725415873h-a11y/kebiao-ota@main'; // 内置更新源
   var DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   var LS = 'gradeSchedule.';
 
@@ -23,31 +23,20 @@
     mode: 'grade',       // grade=年级课程 | mine=我的课程
     mine: {},            // key -> true，我的课程集合
     docId: DEFAULT_DOC_ID,
-    classFilter: '',
-    selected: {},        // 年级模式下 key -> false 表示隐藏（旧配置兼容）
-    periodTimes: JSON.parse(JSON.stringify(DEFAULT_PERIODS)),
     remindOn: false,
     remindLead: 15,
     icsAllday: true,
     notified: {},        // 提醒去重
-    otaUrl: ''           // 软件更新源
+    otaUrl: OTA_URL      // 软件更新源（内置）
   };
 
   function loadSettings() {
     try {
       var s = JSON.parse(localStorage.getItem(LS + 'settings') || '{}');
-      if (s.classFilter !== undefined) state.classFilter = s.classFilter;
-      if (s.selected) state.selected = s.selected;
-      if (s.periodTimes) state.periodTimes = s.periodTimes;
-      if (s.periodsVer !== PERIODS_VER) {
-        // 旧版本默认节次时间 → 迁移为官方作息时间（保留用户真实自定义的可能性低，直接覆盖）
-        state.periodTimes = JSON.parse(JSON.stringify(DEFAULT_PERIODS));
-      }
       if (s.remindOn !== undefined) state.remindOn = s.remindOn;
       if (s.remindLead) state.remindLead = s.remindLead;
       if (s.icsAllday !== undefined) state.icsAllday = s.icsAllday;
       if (s.docId) state.docId = s.docId;
-      if (s.otaUrl !== undefined) state.otaUrl = s.otaUrl;
       if (s.mode === 'mine' || s.mode === 'grade') state.mode = s.mode;
       if (s.mine) state.mine = s.mine;
     } catch (e) { /* 忽略损坏的本地设置 */ }
@@ -67,10 +56,7 @@
   }
   function saveSettings() {
     localStorage.setItem(LS + 'settings', JSON.stringify({
-      classFilter: state.classFilter, selected: state.selected, periodTimes: state.periodTimes,
-      periodsVer: PERIODS_VER,
       mode: state.mode, mine: state.mine,
-      otaUrl: state.otaUrl || '',
       remindOn: state.remindOn, remindLead: state.remindLead, icsAllday: state.icsAllday, docId: state.docId
     }));
   }
@@ -94,8 +80,8 @@
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 190 ? '#33404f' : '#ffffff';
   }
 
-  function periodStart(p) { var t = state.periodTimes[p] || DEFAULT_PERIODS[p]; return t ? t[0] : null; }
-  function periodEnd(p) { var t = state.periodTimes[p] || DEFAULT_PERIODS[p]; return t ? t[1] : null; }
+  function periodStart(p) { var t = DEFAULT_PERIODS[p]; return t ? t[0] : null; }
+  function periodEnd(p) { var t = DEFAULT_PERIODS[p]; return t ? t[1] : null; }
   function courseTimes(c) {
     if (!c.periods) return null;
     var s = periodStart(c.periods[0]), e = periodEnd(c.periods[1]);
@@ -103,12 +89,10 @@
   }
   function minutesOf(hm) { var a = hm.split(':'); return (+a[0]) * 60 + (+a[1]); }
 
-  // 可见性：班级过滤 + 用户选择
+  // 可见性：年级课程全显示；我的课程仅显示已选
   function courseKey(c) { return c.name + '|' + (c.className || ''); }
   function isVisible(c) {
     if (state.mode === 'mine') return !!state.mine[courseKey(c)];
-    if (state.selected[courseKey(c)] === false) return false;
-    if (c.className && state.classFilter && c.className !== state.classFilter) return false;
     return true;
   }
 
@@ -504,16 +488,6 @@
 
   // ---------- 设置 ----------
   function renderSettings() {
-    // 班级 chips
-    var chips = ['<button class="chip ' + (state.classFilter === '' ? 'active' : '') + '" data-cf="">全部</button>'];
-    (state.data ? state.data.classes : []).forEach(function (cl) {
-      chips.push('<button class="chip ' + (state.classFilter === cl ? 'active' : '') + '" data-cf="' + esc(cl) + '">' + esc(cl) + '</button>');
-    });
-    $('classchips').innerHTML = chips.join('');
-    $('classchips').querySelectorAll('.chip').forEach(function (b) {
-      b.onclick = function () { state.classFilter = b.getAttribute('data-cf'); saveSettings(); renderAll(); };
-    });
-
     // 课程清单（我的课程成员编辑）
     var catalog = {};
     if (state.data) {
@@ -561,29 +535,10 @@
       };
     });
 
-    // 节次时间
-    var ph = '';
-    for (var p = 1; p <= 12; p++) {
-      var t = state.periodTimes[p] || DEFAULT_PERIODS[p];
-      ph += '<div class="prow"><span class="pnum">第' + p + '节</span>' +
-        '<input type="time" data-p="' + p + '" data-e="0" value="' + t[0] + '"> - ' +
-        '<input type="time" data-p="' + p + '" data-e="1" value="' + t[1] + '"></div>';
-    }
-    $('periodtimes').innerHTML = '<div class="plist">' + ph + '</div>';
-    $('periodtimes').querySelectorAll('input').forEach(function (inp) {
-      inp.onchange = function () {
-        var p = inp.getAttribute('data-p'), e = +inp.getAttribute('data-e');
-        if (!state.periodTimes[p]) state.periodTimes[p] = DEFAULT_PERIODS[p].slice();
-        state.periodTimes[p][e] = inp.value;
-        saveSettings(); renderAll();
-      };
-    });
-
     $('remindon').checked = state.remindOn;
     $('remindlead').value = String(state.remindLead);
     $('icsallday').checked = state.icsAllday;
     $('opendoc').textContent = window.KebiaoAndroid ? '① 一键在线更新（自动抓取）' : '① 打开腾讯文档';
-    $('otaurl').value = state.otaUrl || '';
     if (window.KebiaoAndroid) {
       var vinfo = (window.KebiaoAndroid.getVersion() || '1|1').split('|');
       $('otastatus').textContent = '当前 UI v' + vinfo[0] + ' · APK v' + vinfo[1];
@@ -706,7 +661,7 @@
     var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (state.mode === 'mine' ? '我的课程' : '年级课表' + (state.classFilter ? '_' + state.classFilter : '')) + '.ics';
+    a.download = (state.mode === 'mine' ? '我的课程' : '年级课表') + '.ics';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
@@ -798,7 +753,6 @@
         toast('✅ 通知通道正常', 3000);
       }
     };
-    $('resetperiods').onclick = function () { state.periodTimes = JSON.parse(JSON.stringify(DEFAULT_PERIODS)); saveSettings(); renderAll(); };
     $('selall').onclick = function () {
       if (!state.data) return;
       state.data.weeks.forEach(function (w) { w.days.forEach(function (arr) { arr.forEach(function (c) { state.mine[courseKey(c)] = true; }); }); });
@@ -830,13 +784,10 @@
       if (!raw) { toast('请先粘贴书签脚本复制的内容'); return; }
       importPayloadText(raw);
     };
-    // ---------- 软件在线更新（OTA） ----------
+    // ---------- 软件在线更新（OTA，内置更新源） ----------
     $('otacheck').onclick = function () {
-      var u = $('otaurl').value.trim();
-      state.otaUrl = u; saveSettings();
       if (!window.KebiaoAndroid) { toast('请在 App 内使用在线更新（浏览器直接刷新页面即可）'); return; }
-      if (!u) { toast('请先填写更新源地址（如 http://192.168.x.x:8787）'); return; }
-      window.KebiaoAndroid.otaCheck(u);
+      window.KebiaoAndroid.otaCheck(OTA_URL);
     };
   }
 
