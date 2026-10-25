@@ -10,7 +10,7 @@
     5: ['13:30', '14:15'], 6: ['14:20', '15:05'], 7: ['15:25', '16:10'], 8: ['16:15', '17:00'],
     9: ['18:30', '19:15'], 10: ['19:20', '20:05'], 11: ['20:10', '20:55'], 12: ['21:00', '21:45']
   };
-  var OTA_URL = 'https://gcore.jsdelivr.net/gh/725415873h-a11y/kebiao-ota@main'; // 内置更新源
+  var OTA_URL = 'https://fastly.jsdelivr.net/gh/725415873h-a11y/kebiao-ota@main'; // 内置更新源（fastly 节点缓存刷新最快）
   var DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   var LS = 'gradeSchedule.';
 

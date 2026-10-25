@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-10-25T13:35:28.418Z",
+  "recordedAt": "2026-10-25T14:19:43.829Z",
   "sessionId": "sess_d143e025-6eec-4758-be00-376f973c36c8",
   "event": "PostToolUse",
   "toolName": "Edit",
-  "file": "C:\\Users\\72541\\Desktop\\免刻蚀超高Q混合微腔赋能低维材料光子学\\course-schedule-app\\scratch\\publish-ota.sh",
+  "file": "C:\\Users\\72541\\Desktop\\免刻蚀超高Q混合微腔赋能低维材料光子学\\course-schedule-app\\android\\java\\online\\grade\\kebiao\\MainActivity.java",
   "outcome": "inconclusive",
   "coverage": "partial",
   "findingCount": 0,
-  "durationMs": 10,
+  "durationMs": 11,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }
