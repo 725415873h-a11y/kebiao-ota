@@ -281,11 +281,10 @@
     // 仅在「我的课程」完全为空时给出引导；普通空周不提示、不改动布局
     var mineEmpty = state.mode === 'mine' && !Object.keys(state.mine).length;
     $('tt-empty').hidden = !mineEmpty;
-    if (mineEmpty) $('tt-empty').textContent = '我的课程还是空的：点头部的「年级课程」切回后点课程卡片加入，或在设置中按班级生成';
+    if (mineEmpty) $('tt-empty').textContent = '我的课程还是空的，点头部的「年级课程」切回后点课程卡片加入，或在设置中按班级生成';
 
     var activeP = currentPeriod();
     var html = '';
-    if (todayIdx >= 0) html += '<div class="todaycol" style="grid-column:' + (todayIdx + 2) + ';grid-row:1/-1;"></div>';
     // 左侧节次列：节次号 + 起止时间，当前节高亮
     for (var p = 1; p <= 12; p++) {
       var t0 = periodStart(p), t1 = periodEnd(p);
