@@ -227,9 +227,11 @@ body { background: var(--card); }
 .course.hidden-course { opacity: .35; }
 
 /* 今日 */
-#today-head { background: var(--card); border-radius: var(--radius); padding: 14px 0 6px; margin-bottom: 10px; border: none; }
-#today-head .big { font-size: 20px; font-weight: 800; }
-#today-head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+#next-card.weekinfo {
+  background: none; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  font-size: 13px; padding: 2px 0 10px;
+}
 #next-card {
   background: linear-gradient(135deg, var(--primary), #4c9cff); color: #fff;
   border-radius: var(--radius); padding: 14px; margin-bottom: 10px;

@@ -149,6 +149,7 @@
     $('todaynav').hidden = !isTD;
     $('main').classList.toggle('fit', isTT);
     $('modename').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
+    $('modename2').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
     renderWeekNav();
     if (isTD) renderTodayNav();
     renderTimetable();
@@ -179,12 +180,13 @@
   }
 
   // 课程模式选择：标题下方下拉菜单（年级课程 / 我的课程）
-  function showModePicker() {
+  function showModePicker(anchorId) {
+    var anchor = $(anchorId || 'pagetitle');
     var mineN = Object.keys(state.mine).length;
     var menu = $('modemenu');
     var panel = menu.querySelector('.mm-panel');
     panel.innerHTML = [
-      { m: 'grade', ico: '📅', bg: '#5A9DBD', name: '年级课程', desc: '全年级课表 · 可按班级过滤' },
+      { m: 'grade', ico: '📅', bg: '#5A9DBD', name: '年级课程', desc: '全年级课表' },
       { m: 'mine', ico: '⭐', bg: '#E0B092', name: '我的课程', desc: mineN ? '已选 ' + mineN + ' 门课程' : '还未添加课程' }
     ].map(function (it) {
       return '<button class="mm-item' + (state.mode === it.m ? ' cur' : '') + '" data-m="' + it.m + '">' +
@@ -193,8 +195,8 @@
         '<span class="mm-check">✓</span></button>';
     }).join('');
     menu.hidden = false;
-    $('pagetitle').classList.add('open');
-    var r = $('pagetitle').getBoundingClientRect();
+    anchor.classList.add('open');
+    var r = anchor.getBoundingClientRect();
     panel.style.left = Math.max(10, r.left - 8) + 'px';
     panel.style.top = (r.bottom + 8) + 'px';
     panel.querySelectorAll('.mm-item').forEach(function (b) {
@@ -208,6 +210,7 @@
   function hideModePicker() {
     $('modemenu').hidden = true;
     $('pagetitle').classList.remove('open');
+    $('pagetitle2') && $('pagetitle2').classList.remove('open');
   }
 
   // 周次下拉选择（移植 fzuhelper 的周切换交互）
@@ -522,16 +525,13 @@
 
     var tc = dateCourses(viewDate);
     if (!tc) {
-      $('today-head').innerHTML = '<div class="big">' + todayStr(viewDate) + '</div><div class="sub">不在课表范围内</div>';
       $('next-card').style.display = 'none';
-      $('today-list').innerHTML = '';
+      $('today-list').innerHTML = '<div class="empty">不在课表范围内</div>';
       return;
     }
     var isToday = (state.todayOffset || 0) === 0;
-    var dt = tc.week.dates[tc.dayIdx];
-    $('today-head').innerHTML = '<div class="big">' + (isToday ? '今天 · ' : '') + DAY_NAMES[tc.dayIdx] + '</div>' +
-      '<div class="sub">' + (dt ? dt.date : '') + '（第' + tc.week.week + '周）</div>' +
-      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '');
+    // 周次/备注信息并入下节课卡片下方副标题
+    var weekInfo = '第' + tc.week.week + '周' + (isToday ? '' : '　' + (tc.week.dates[tc.dayIdx] ? tc.week.dates[tc.dayIdx].date : ''));
 
     // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
     var nowMin = now.getHours() * 60 + now.getMinutes();
@@ -549,7 +549,7 @@
     if (focus && isToday) {
       nc.className = '';
       nc.style.display = '';
-      nc.innerHTML = '<div class="label">' + (current ? '正在进行' : '下一节课') + '</div>' +
+      nc.innerHTML = '<div class="label">' + (current ? '正在进行' : '下一节课') + ' · ' + weekInfo + '</div>' +
         '<div class="main">' + esc(focus.c.name) + (focus.c.className ? ' @' + esc(focus.c.className) : '') + '</div>' +
         '<div class="sub">' + focus.t.start + ' - ' + focus.t.end + (focus.c.location ? ' · ' + esc(focus.c.location) : '') +
         (focus.c.teacher ? ' · ' + esc(focus.c.teacher) : '') + '</div>' +
@@ -557,8 +557,10 @@
           ? '还有 ' + (minutesOf(focus.t.end) - nowMin) + ' 分钟下课'
           : (function () { var m = minutesOf(focus.t.start) - nowMin; return m >= 60 ? Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分钟后上课' : m + ' 分钟后上课'; })()) + '</div>';
     } else {
-      // 无当前/下一节课：不显示灰色占位模块
-      nc.style.display = 'none';
+      // 无实时卡片时，用细条显示周次/备注信息
+      nc.className = 'weekinfo';
+      nc.style.display = tc.week.notes.length || !isToday ? '' : 'none';
+      nc.innerHTML = '<span>' + weekInfo + '</span>' + (tc.week.notes.length ? '<span>📌 ' + esc(tc.week.notes.join('；')) + '</span>' : '');
     }
 
     // 列表
@@ -839,9 +841,12 @@
         }
       };
     });
-    // fzuhelper 风格：标题切换课程模式 + 周次切换（箭头步进 / 点周数弹列表）
+    // fzuhelper 风格：标题切换课程模式（课表页/今天页共用菜单）+ 周次切换
     $('pagetitle').onclick = function () {
-      if ($('modemenu').hidden) showModePicker(); else hideModePicker();
+      if ($('modemenu').hidden) showModePicker('pagetitle'); else hideModePicker();
+    };
+    $('pagetitle2').onclick = function () {
+      if ($('modemenu').hidden) showModePicker('pagetitle2'); else hideModePicker();
     };
     $('modemenu').querySelector('.mm-mask').onclick = hideModePicker;
     $('weeklabel').onclick = showWeekPicker;
