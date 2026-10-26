@@ -122,6 +122,8 @@ body { background: var(--card); }
 }
 #main.fit::-webkit-scrollbar { display: none; }
 .view { padding: 10px; }
+#view-today.slide-next { animation: kbSlideNext .3s cubic-bezier(.22, .61, .36, 1) both; }
+#view-today.slide-prev { animation: kbSlidePrev .3s cubic-bezier(.22, .61, .36, 1) both; }
 #view-timetable { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0; }
 .empty { text-align: center; color: #98a3b1; font-size: 13px; padding: 48px 20px; background: none; }
 

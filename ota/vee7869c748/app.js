@@ -73,7 +73,8 @@
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function hashHue(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h >>> 0; }
   // 低饱和课程色板（借鉴 west2-online/fzuhelper）
-  var PALETTE = ['#7A6068', '#8D5270', '#5A9DBD', '#307D81', '#B99799', '#AA9CC6', '#A2CAE7', '#619AA0', '#D8B4BB', '#E5B9D3', '#5BB3DD', '#94C096', '#D07A88', '#F0C4A9', '#92BAC5', '#9AD1CD', '#F39E9D', '#E0B092', '#7D89AB', '#BBD5B4', '#C6A5B6', '#87B9C1', '#E3A8A1', '#A5C7A6', '#D4B8CE'];
+  // 仅深色（白字对比度充足，亮度均 < 125）
+  var PALETTE = ['#7A6068', '#8D5270', '#3A82A8', '#2E7377', '#8B7396', '#527F98', '#4C8376', '#B0656F', '#96687E', '#58779E', '#C0747E', '#8C5A4A', '#6B5E8C', '#8C6E56', '#A05C74', '#5B7A56', '#7E5D74', '#4E6E78', '#98576B', '#6E5E50'];
   function courseColor(c) { return PALETTE[hashHue(c.name + (c.className || '')) % PALETTE.length]; }
   function textOn(hex) {
     var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
@@ -506,8 +507,18 @@
 
   function renderToday() {
     var now = new Date();
+    var prevOffset = state._todayPrevOffset;
+    var curOffset = state.todayOffset || 0;
+    state._todayPrevOffset = curOffset;
+    // 切天滑动动画（方向由偏移变化决定）
+    if (prevOffset !== undefined && prevOffset !== curOffset) {
+      var vw = $('view-today');
+      vw.classList.remove('slide-next', 'slide-prev');
+      void vw.offsetWidth;
+      vw.classList.add(curOffset > prevOffset ? 'slide-next' : 'slide-prev');
+    }
     var viewDate = new Date(now.getTime());
-    viewDate.setDate(viewDate.getDate() + (state.todayOffset || 0));
+    viewDate.setDate(viewDate.getDate() + curOffset);
 
     var tc = dateCourses(viewDate);
     if (!tc) {
@@ -519,7 +530,7 @@
     var isToday = (state.todayOffset || 0) === 0;
     var dt = tc.week.dates[tc.dayIdx];
     $('today-head').innerHTML = '<div class="big">' + (isToday ? '今天 · ' : '') + DAY_NAMES[tc.dayIdx] + '</div>' +
-      '<div class="sub">' + (dt ? dt.date : '') + '（第' + tc.week.week + '周）' + (isToday ? '' : '　非当日') + '</div>' +
+      '<div class="sub">' + (dt ? dt.date : '') + '（第' + tc.week.week + '周）</div>' +
       (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '');
 
     // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
@@ -1107,16 +1118,20 @@
     window.__doRefresh = doRefresh;
   }
 
-  // ---------- 左右滑动切换周（touch 事件不受浏览器滚动取消影响；鼠标走 pointer） ----------
+  // ---------- 左右滑动切换（课表页=切周，今天页=切天；touch 事件；鼠标走 pointer） ----------
   function setupWeekSwipe() {
     var main = $('main');
     var x0 = 0, y0 = 0, on = false, consumed = false;
     var check = function (x, y) {
-      if (!on || consumed || state.tab !== 'timetable') return;
+      if (!on || consumed) return;
       var dx = x - x0, dy = y - y0;
       if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) {
         consumed = true;
-        if (dx < 0) $('nextweek').click(); else $('prevweek').click();
+        if (state.tab === 'timetable') {
+          if (dx < 0) $('nextweek').click(); else $('prevweek').click();
+        } else if (state.tab === 'today') {
+          if (dx < 0) $('nextday').click(); else $('prevday').click();
+        }
       }
     };
     var end = function () { on = false; consumed = false; };
