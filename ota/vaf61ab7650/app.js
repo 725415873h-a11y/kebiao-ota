@@ -114,6 +114,8 @@
   var dataSource = 'none'; // snapshot | cache
   var pendingRefreshResolve = null; // APK 后台抓取期间挂起的下拉刷新回调
   var slideDir = 0; // 周切换动画方向：+1 下一周（右入），-1 上一周（左入）
+  var cycTimer = null;   // 重叠轮播定时器（模块级防泄漏）
+  var cycleState = {};   // 各重叠卡当前显示序号
 
   function applyData(j, source) {
     state.data = { weeks: j.weeks, classes: j.classes, meta: j.meta || {} };
@@ -329,12 +331,12 @@
     });
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
-      if (clusterOf[key].primary !== key) return; // 非主卡不渲染（重叠课收进弹层）
+      if (clusterOf[key].primary !== key) return; // 非主卡不渲染（重叠课由主卡轮播展示）
       var c = g.c;
       var col = courseColor(c);
       var n = clusterOf[key].members.length;
       var badge = n > 1 ? '<i class="ovbadge">' + n + '</i>' : '';
-      html += '<div class="course" data-k="' + esc(clusterOf[key].primary) + '" style="grid-column:' + (g.d + 2) +
+      html += '<div class="course' + (n > 1 ? ' cyc' : '') + '" data-k="' + esc(clusterOf[key].primary) + '" style="grid-column:' + (g.d + 2) +
         ';grid-row:' + rowOf(g.p1) + '/' + (rowOf(c.periods[1]) + 1) + ';background-color:' + col + ';color:#fff;">' +
         badge +
         '<div class="cname">' + esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '') + '</div>' +
@@ -342,6 +344,33 @@
         '</div>';
     });
     body.innerHTML = html;
+
+    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程（角标淡入动画）
+    function startCycle() {
+      if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
+      cycTimer = setInterval(function () {
+        var cards = body.querySelectorAll('.course.cyc');
+        if (!cards.length) return;
+        cards.forEach(function (el) {
+          var key = el.getAttribute('data-k');
+          var cl = clusterOf[key];
+          var cur = cycleState[key] || 0;
+          var next = (cur + 1) % cl.members.length;
+          cycleState[key] = next;
+          var c = groups[cl.members[next].key].c;
+          var col = courseColor(c);
+          el.style.transition = 'opacity .25s';
+          el.style.opacity = '0.25';
+          setTimeout(function () {
+            el.style.backgroundColor = col;
+            el.querySelector('.cname').innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
+            el.querySelector('.croom').textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
+            el.style.opacity = '1';
+          }, 250);
+        });
+      }, 2000);
+    }
+    startCycle();
 
     // 事件卡片（不排课等）：纵向铺满当天整列，多个事件时均分
     Object.keys(eventsByDay).forEach(function (d) {
@@ -711,7 +740,9 @@
         $('weeknav').hidden = state.tab !== 'timetable';
         $('main').classList.toggle('fit', state.tab === 'timetable');
         if (state.tab === 'today') renderToday();
-        // 点「课表」「今天」页签 = 一次隐式刷新（带冷却）
+        // 点「课表」「今天」页签 = 一次隐式刷新（带冷却）；离开课表页时停轮播
+        if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
+        if (state.tab === 'timetable') renderTimetable();
         if (state.tab === 'timetable' || state.tab === 'today') {
           window.__doRefresh && window.__doRefresh(false);
         }
