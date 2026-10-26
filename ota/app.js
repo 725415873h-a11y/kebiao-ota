@@ -142,11 +142,14 @@
   // ---------- 渲染 ----------
   function renderAll() {
     var isTT = state.tab === 'timetable';
-    $('topbar-title').hidden = isTT;
+    var isTD = state.tab === 'today';
+    $('topbar-title').hidden = isTT || isTD;
     $('weeknav').hidden = !isTT;
+    $('todaynav').hidden = !isTD;
     $('main').classList.toggle('fit', isTT);
     $('modename').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
     renderWeekNav();
+    if (isTD) renderTodayNav();
     renderTimetable();
     renderToday();
     renderSettings();
@@ -461,43 +464,63 @@
     return { week: loc.week, dayIdx: loc.dayIdx, list: list };
   }
 
-  // 今天页查看日期偏移（0=今天，-2~+2 前天~后天）
+  // 今天页查看日期偏移（0=今天）
   state.todayOffset = state.todayOffset || 0;
+
+  function offsetName(off) {
+    return off === 0 ? '今天' : off === -1 ? '昨天' : off === 1 ? '明天' : off === -2 ? '前天' : '后天';
+  }
+
+  // 今天页顶栏：左标题 + ‹ 标签 ›（与课表页周切换同版式）
+  function renderTodayNav() {
+    var off = state.todayOffset || 0;
+    var now = new Date();
+    var d = new Date(now.getTime());
+    d.setDate(d.getDate() + off);
+    $('todaydate').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    $('daylabel').textContent = offsetName(off);
+    $('prevday').disabled = off <= -2;
+    $('nextday').disabled = off >= 2;
+  }
+
+  // 日期选择弹层（点顶栏中间标签，同周次列表样式）
+  function showDayPicker() {
+    var now = new Date();
+    var html = '';
+    for (var i = -2; i <= 2; i++) {
+      var d = new Date(now.getTime());
+      d.setDate(d.getDate() + i);
+      html += '<button class="witem' + ((state.todayOffset || 0) === i ? ' cur' : '') + '" data-off="' + i + '">' +
+        '<span>' + offsetName(i) + '</span><span class="wd">' + (d.getMonth() + 1) + '.' + d.getDate() + ' · ' + DAY_NAMES[(d.getDay() + 6) % 7] + '</span></button>';
+    }
+    openModal(html, '', null);
+    $('modal-body').querySelectorAll('.witem').forEach(function (b) {
+      b.onclick = function () {
+        state.todayOffset = +b.getAttribute('data-off');
+        closeModal();
+        renderTodayNav();
+        renderToday();
+      };
+    });
+  }
 
   function renderToday() {
     var now = new Date();
     var viewDate = new Date(now.getTime());
     viewDate.setDate(viewDate.getDate() + (state.todayOffset || 0));
 
-    // 日期切换条（前天~后天）
-    var labels = ['前天', '昨天', '今天', '明天', '后天'];
-    var strip = '<div id="daystrip2">';
-    for (var i = -2; i <= 2; i++) {
-      var d = new Date(now.getTime());
-      d.setDate(d.getDate() + i);
-      var sel = (state.todayOffset || 0) === i;
-      var isToday = i === 0;
-      strip += '<button class="dcell2' + (sel ? ' sel' : '') + (isToday ? ' today' : '') + '" data-off="' + i + '">' +
-        (i === 0 ? '今天' : (i === -1 ? '昨天' : i === 1 ? '明天' : i === -2 ? '前天' : '后天')) +
-        '<span class="dn2">' + (d.getMonth() + 1) + '.' + d.getDate() + '</span></button>';
-    }
-    strip += '</div>';
-
     var tc = dateCourses(viewDate);
     if (!tc) {
-      $('today-head').innerHTML = '<div class="big">' + todayStr(viewDate) + '</div><div class="sub">不在课表范围内</div>' + strip;
+      $('today-head').innerHTML = '<div class="big">' + todayStr(viewDate) + '</div><div class="sub">不在课表范围内</div>';
       $('next-card').style.display = 'none';
       $('today-list').innerHTML = '';
-      bindDayStrip();
       return;
     }
     var isToday = (state.todayOffset || 0) === 0;
     var dt = tc.week.dates[tc.dayIdx];
-    $('today-head').innerHTML = '<div class="big">' + (isToday ? '今天 · ' : '') + DAY_NAMES[tc.dayIdx] +
-      (isToday ? '' : ' · ' + (dt ? dt.date : '')) + '</div>' +
+    $('today-head').innerHTML = '<div class="big">' + (isToday ? '今天 · ' : '') + DAY_NAMES[tc.dayIdx] + '</div>' +
       '<div class="sub">' + (dt ? dt.date : '') + '（第' + tc.week.week + '周）' + (isToday ? '' : '　非当日') + '</div>' +
-      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '') +
-      strip;
+      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '');
 
     // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
     var nowMin = now.getHours() * 60 + now.getMinutes();
@@ -543,19 +566,6 @@
     });
     $('today-list').innerHTML = html || '<div class="empty">' +
       (state.mode === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '当天没有课程') + '</div>';
-    bindDayStrip();
-  }
-
-  // 绑定今天页日期切换条
-  function bindDayStrip() {
-    var strip = document.getElementById('daystrip2');
-    if (!strip) return;
-    strip.querySelectorAll('.dcell2').forEach(function (b) {
-      b.onclick = function () {
-        state.todayOffset = +b.getAttribute('data-off');
-        renderToday();
-      };
-    });
   }
 
   // 按任意日期取课程（返回 { week, dayIdx, list } 或 null）
@@ -805,10 +815,11 @@
         ['timetable', 'today', 'settings'].forEach(function (t) {
           $('view-' + t).hidden = t !== state.tab;
         });
-        $('topbar-title').hidden = state.tab === 'timetable';
+        $('topbar-title').hidden = state.tab === 'timetable' || state.tab === 'today';
         $('weeknav').hidden = state.tab !== 'timetable';
+        $('todaynav').hidden = state.tab !== 'today';
         $('main').classList.toggle('fit', state.tab === 'timetable');
-        if (state.tab === 'today') renderToday();
+        if (state.tab === 'today') { renderTodayNav(); renderToday(); }
         // 点「课表」「今天」页签 = 一次隐式刷新（带冷却）；离开课表页时停轮播
         if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
         if (state.tab === 'timetable') renderTimetable();
@@ -832,6 +843,14 @@
       if (!state.data) return;
       var i = state.data.weeks.findIndex(function (x) { return x.week === state.week; });
       if (i < state.data.weeks.length - 1) { slideDir = 1; state.week = state.data.weeks[i + 1].week; renderWeekNav(); renderTimetable(); }
+    };
+    // 今天页顶栏日期切换（箭头步进 / 点标签弹日期列表）
+    $('daylabel').onclick = showDayPicker;
+    $('prevday').onclick = function () {
+      if ((state.todayOffset || 0) > -2) { state.todayOffset = (state.todayOffset || 0) - 1; renderTodayNav(); renderToday(); }
+    };
+    $('nextday').onclick = function () {
+      if ((state.todayOffset || 0) < 2) { state.todayOffset = (state.todayOffset || 0) + 1; renderTodayNav(); renderToday(); }
     };
     $('modal-close').onclick = closeModal;
     document.querySelector('.modal-mask').onclick = closeModal;
