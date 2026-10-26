@@ -326,7 +326,11 @@
         var primary = cl.slice().sort(function (a, b) {
           return (b.p2 - b.p1) - (a.p2 - a.p1) || a.p1 - b.p1;
         })[0];
-        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primary: primary.key }; });
+        // 我的课程成员优先当主卡（锁定显示，不轮播）
+        var mineKey = null;
+        cl.forEach(function (it) { if (!mineKey && state.mine[courseKey(groups[it.key].c)]) mineKey = it.key; });
+        if (mineKey) primary = { key: mineKey };
+        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primary: primary.key, mineLock: !!mineKey }; });
       });
     });
     Object.keys(groups).forEach(function (key) {
@@ -345,7 +349,7 @@
     });
     body.innerHTML = html;
 
-    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程（角标淡入动画）
+    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程；锁定我的课程成员的簇不轮播
     function startCycle() {
       if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
       cycTimer = setInterval(function () {
@@ -354,6 +358,7 @@
         cards.forEach(function (el) {
           var key = el.getAttribute('data-k');
           var cl = clusterOf[key];
+          if (cl.mineLock) return; // 我的课程锁定，不轮播
           var cur = cycleState[key] || 0;
           var next = (cur + 1) % cl.members.length;
           cycleState[key] = next;
@@ -456,32 +461,58 @@
     return { week: loc.week, dayIdx: loc.dayIdx, list: list };
   }
 
+  // 今天页查看日期偏移（0=今天，-2~+2 前天~后天）
+  state.todayOffset = state.todayOffset || 0;
+
   function renderToday() {
-    var tc = todayCourses();
     var now = new Date();
-    if (!tc.week) {
-      $('today-head').innerHTML = '<div class="big">' + todayStr(now) + '</div><div class="sub">今天不在课表范围内</div>';
+    var viewDate = new Date(now.getTime());
+    viewDate.setDate(viewDate.getDate() + (state.todayOffset || 0));
+
+    // 日期切换条（前天~后天）
+    var labels = ['前天', '昨天', '今天', '明天', '后天'];
+    var strip = '<div id="daystrip2">';
+    for (var i = -2; i <= 2; i++) {
+      var d = new Date(now.getTime());
+      d.setDate(d.getDate() + i);
+      var sel = (state.todayOffset || 0) === i;
+      var isToday = i === 0;
+      strip += '<button class="dcell2' + (sel ? ' sel' : '') + (isToday ? ' today' : '') + '" data-off="' + i + '">' +
+        (i === 0 ? '今天' : (i === -1 ? '昨天' : i === 1 ? '明天' : i === -2 ? '前天' : '后天')) +
+        '<span class="dn2">' + (d.getMonth() + 1) + '.' + d.getDate() + '</span></button>';
+    }
+    strip += '</div>';
+
+    var tc = dateCourses(viewDate);
+    if (!tc) {
+      $('today-head').innerHTML = '<div class="big">' + todayStr(viewDate) + '</div><div class="sub">不在课表范围内</div>' + strip;
       $('next-card').style.display = 'none';
       $('today-list').innerHTML = '';
+      bindDayStrip();
       return;
     }
+    var isToday = (state.todayOffset || 0) === 0;
     var dt = tc.week.dates[tc.dayIdx];
-    $('today-head').innerHTML = '<div class="big">今天 · ' + DAY_NAMES[tc.dayIdx] + '</div>' +
-      '<div class="sub">' + dt.date + '（第' + tc.week.week + '周）</div>' +
-      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '');
+    $('today-head').innerHTML = '<div class="big">' + (isToday ? '今天 · ' : '') + DAY_NAMES[tc.dayIdx] +
+      (isToday ? '' : ' · ' + (dt ? dt.date : '')) + '</div>' +
+      '<div class="sub">' + (dt ? dt.date : '') + '（第' + tc.week.week + '周）' + (isToday ? '' : '　非当日') + '</div>' +
+      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '') +
+      strip;
 
-    // 下节课卡片
+    // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var next = null, current = null;
-    tc.list.forEach(function (it) {
-      if (!it.t) return;
-      var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
-      if (nowMin >= s && nowMin < e) current = it;
-      if (!next && nowMin < s) next = it;
-    });
+    if (isToday) {
+      tc.list.forEach(function (it) {
+        if (!it.t) return;
+        var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
+        if (nowMin >= s && nowMin < e) current = it;
+        if (!next && nowMin < s) next = it;
+      });
+    }
     var nc = $('next-card');
     var focus = current || next;
-    if (focus) {
+    if (focus && isToday) {
       nc.className = '';
       nc.style.display = '';
       nc.innerHTML = '<div class="label">' + (current ? '正在进行' : '下一节课') + '</div>' +
@@ -500,7 +531,7 @@
     var html = '';
     tc.list.forEach(function (it) {
       var cls = 'titem';
-      if (it.t) {
+      if (it.t && isToday) {
         var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
         if (nowMin >= e) cls += ' past';
         else if (nowMin >= s) cls += ' now';
@@ -511,7 +542,45 @@
         '<div class="meta">' + [it.c.location, it.c.teacher, it.c.slot].filter(Boolean).map(esc).join(' · ') + '</div></div></div>';
     });
     $('today-list').innerHTML = html || '<div class="empty">' +
-      (state.mode === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '今天没有课程') + '</div>';
+      (state.mode === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '当天没有课程') + '</div>';
+    bindDayStrip();
+  }
+
+  // 绑定今天页日期切换条
+  function bindDayStrip() {
+    var strip = document.getElementById('daystrip2');
+    if (!strip) return;
+    strip.querySelectorAll('.dcell2').forEach(function (b) {
+      b.onclick = function () {
+        state.todayOffset = +b.getAttribute('data-off');
+        renderToday();
+      };
+    });
+  }
+
+  // 按任意日期取课程（返回 { week, dayIdx, list } 或 null）
+  function dateCourses(date) {
+    if (!state.data) return null;
+    var t = todayStr(date);
+    for (var i = 0; i < state.data.weeks.length; i++) {
+      var w = state.data.weeks[i];
+      for (var d = 0; d < 7; d++) {
+        if (w.dates[d] && w.dates[d].date === t) {
+          var list = [];
+          (w.days[d] || []).forEach(function (c) {
+            if (isVisible(c)) list.push({ c: c, t: courseTimes(c) });
+          });
+          list.sort(function (a, b) {
+            if (!a.t && !b.t) return 0;
+            if (!a.t) return 1;
+            if (!b.t) return -1;
+            return minutesOf(a.t.start) - minutesOf(b.t.start);
+          });
+          return { week: w, dayIdx: d, list: list };
+        }
+      }
+    }
+    return null;
   }
 
   // ---------- 设置 ----------
