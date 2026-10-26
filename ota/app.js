@@ -185,6 +185,9 @@
       $('prevweek').disabled = state.data.weeks[0].week >= w.week;
       $('nextweek').disabled = state.data.weeks[state.data.weeks.length - 1].week <= w.week;
     }
+    // 非“本周”时显示右侧回位按钮
+    var loc = findTodayLocation();
+    $('backtoday-week').hidden = !loc || loc.week.week === w.week;
   }
 
   // 课程模式选择：标题下方下拉菜单（年级课程 / 我的课程）
@@ -491,6 +494,8 @@
     $('daylabel').textContent = offsetName(off);
     $('prevday').disabled = off <= -2;
     $('nextday').disabled = off >= 2;
+    // 非“今天”时显示右侧回位按钮
+    $('backtoday-day').hidden = off === 0;
   }
 
   // 日期选择弹层（点顶栏中间标签，同周次列表样式）
@@ -873,6 +878,14 @@
     };
     $('nextday').onclick = function () {
       if ((state.todayOffset || 0) < 2) { state.todayOffset = (state.todayOffset || 0) + 1; renderTodayNav(); renderToday(); }
+    };
+    // 回位按钮：课表回本周 / 今天页回本天
+    $('backtoday-week').onclick = function () {
+      var loc = findTodayLocation();
+      if (loc) { slideDir = loc.week.week > state.week ? 1 : -1; state.week = loc.week.week; renderWeekNav(); renderTimetable(); }
+    };
+    $('backtoday-day').onclick = function () {
+      state.todayOffset = 0; renderTodayNav(); renderToday();
     };
     $('modal-close').onclick = closeModal;
     document.querySelector('.modal-mask').onclick = closeModal;

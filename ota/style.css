@@ -40,6 +40,14 @@ body { background: var(--card); }
   position: absolute; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center;
 }
+/* 回到本周/本天 按钮：顶栏最右，与左侧标题水平对称 */
+.backbtn {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  border: none; background: rgba(26, 115, 232, .1); color: var(--primary);
+  border-radius: 999px; padding: 5px 13px;
+  font-size: 13px; font-weight: 700; line-height: 1;
+}
+.backbtn:active { background: rgba(26, 115, 232, .2); }
 .pagetitle {
   border: none; background: none; font-size: 21px; font-weight: 800;
   color: var(--text); padding: 0; display: flex; align-items: center;
