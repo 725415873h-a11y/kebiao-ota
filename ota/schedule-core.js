@@ -226,17 +226,9 @@
         const note = at(r, 10).trim();
         if (note) notes.push(note);
       }
-      // 合并单元格遮盖：同列中起始行更早、节次完全包含且跨度更大的课会盖住小跨度课（数据层残留）
+      // 不做合并遮盖过滤：同列同时段多门课是真实并行课，全量保留（渲染层角标+弹层展示）
       for (let d = 0; d < 7; d++) {
-        const list = days[d];
-        days[d] = list.filter(function (b) {
-          if (!b.periods) return true;
-          return !list.some(function (a) {
-            return a !== b && a.periods && a.row < b.row &&
-              a.periods[0] <= b.periods[0] && a.periods[1] >= b.periods[1] &&
-              (a.periods[1] - a.periods[0]) > (b.periods[1] - b.periods[0]);
-          });
-        }).map(function (c) { const o = Object.assign({}, c); delete o.row; return o; });
+        days[d] = days[d].map(function (c) { const o = Object.assign({}, c); delete o.row; return o; });
       }
       const dates = [];
       for (let i = 0; i < 7; i++) {

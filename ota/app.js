@@ -299,22 +299,22 @@
       if (!it.c.periods) { (eventsByDay[it.d] = eventsByDay[it.d] || []).push(it.c); }
     });
 
-    // 课程：同一时段多门时只显示第一门；时段重叠的课聚成簇，主卡全宽+角标数，点击弹层看全部
+    // 课程：按 (天,起始节) 全量收集；重叠课聚簇，主卡全宽 + 右上角标（重叠数），点击弹列表（fzuhelper 方式）
     var groups = {};
     items.forEach(function (it) {
       var c = it.c;
       if (!c.periods) return;
-      var key = it.d + '@' + c.periods[0];
-      if (!groups[key]) groups[key] = { d: it.d, p1: c.periods[0], c: c };
+      var key = it.d + '@' + c.periods[0] + '#' + courseKey(c);
+      groups[key] = { d: it.d, p1: c.periods[0], c: c };
     });
     var byDay = {};
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
       (byDay[g.d] = byDay[g.d] || []).push({ p1: g.p1, p2: g.c.periods[1], key: key });
     });
-    var clusterOf = {}; // key -> { members:[{p1,p2,key}], primaryKey }
+    var clusterOf = {}; // key -> { members, primary }
     Object.keys(byDay).forEach(function (d) {
-      var list = byDay[d].sort(function (a, b) { return a.p1 - b.p1; });
+      var list = byDay[d].sort(function (a, b) { return a.p1 - b.p1 || a.p2 - b.p2; });
       var clusters = [], cur = null, curEnd = -1;
       list.forEach(function (it) {
         if (!cur || it.p1 > curEnd) { cur = [it]; clusters.push(cur); curEnd = it.p2; }
@@ -324,16 +324,17 @@
         var primary = cl.slice().sort(function (a, b) {
           return (b.p2 - b.p1) - (a.p2 - a.p1) || a.p1 - b.p1;
         })[0];
-        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primaryKey: primary.key }; });
+        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primary: primary.key }; });
       });
     });
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
-      if (clusterOf[key].primaryKey !== key) return; // 非主卡不渲染
+      if (clusterOf[key].primary !== key) return; // 非主卡不渲染（重叠课收进弹层）
       var c = g.c;
       var col = courseColor(c);
-      var badge = clusterOf[key].members.length > 1 ? '<i class="ovbadge">' + clusterOf[key].members.length + '</i>' : '';
-      html += '<div class="course" data-d="' + g.d + '" data-p="' + g.p1 + '" style="grid-column:' + (g.d + 2) +
+      var n = clusterOf[key].members.length;
+      var badge = n > 1 ? '<i class="ovbadge">' + n + '</i>' : '';
+      html += '<div class="course" data-k="' + esc(clusterOf[key].primary) + '" style="grid-column:' + (g.d + 2) +
         ';grid-row:' + rowOf(g.p1) + '/' + (rowOf(c.periods[1]) + 1) + ';background-color:' + col + ';color:#fff;">' +
         badge +
         '<div class="cname">' + esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '') + '</div>' +
@@ -359,19 +360,18 @@
       });
     });
 
-    // 课程点击：重叠簇弹列表，普通课弹详情
+    // 课程点击：重叠簇弹列表（角标卡），普通课弹详情
     body.querySelectorAll('.course:not(.no-class)').forEach(function (el) {
       el.onclick = function () {
-        var d = +el.getAttribute('data-d'), p = +el.getAttribute('data-p');
-        var key = d + '@' + p;
+        var key = el.getAttribute('data-k');
         var g = groups[key];
         if (!g) return;
         var cl = clusterOf[key];
         if (cl && cl.members.length > 1) {
           var list = cl.members.map(function (m) { return groups[m.key].c; });
-          showCourseListModal(list, d, w);
+          showCourseListModal(list, g.d, w);
         } else {
-          showCourseModal(g.c, d, w);
+          showCourseModal(g.c, g.d, w);
         }
       };
     });
