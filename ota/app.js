@@ -38,6 +38,7 @@
       if (s.icsAllday !== undefined) state.icsAllday = s.icsAllday;
       if (s.docId) state.docId = s.docId;
       if (s.mode === 'mine' || s.mode === 'grade') state.mode = s.mode;
+      if (s.todayMode === 'mine' || s.todayMode === 'grade') state.todayMode = s.todayMode;
       if (s.mine) state.mine = s.mine;
     } catch (e) { /* 忽略损坏的本地设置 */ }
     var cached = localStorage.getItem(LS + 'data');
@@ -56,7 +57,7 @@
   }
   function saveSettings() {
     localStorage.setItem(LS + 'settings', JSON.stringify({
-      mode: state.mode, mine: state.mine,
+      mode: state.mode, todayMode: state.todayMode || 'grade', mine: state.mine,
       remindOn: state.remindOn, remindLead: state.remindLead, icsAllday: state.icsAllday, docId: state.docId
     }));
   }
@@ -90,10 +91,17 @@
   }
   function minutesOf(hm) { var a = hm.split(':'); return (+a[0]) * 60 + (+a[1]); }
 
-  // 可见性：年级课程全显示；我的课程仅显示已选
+  // 模式独立：课表页与今天页各自记忆（mode=课表页, todayMode=今天页）
+  function modeFor(tab) { return tab === 'today' ? (state.todayMode || 'grade') : (state.mode || 'grade'); }
+  function setModeFor(tab, m) {
+    if (tab === 'today') { state.todayMode = m; saveSettings(); renderTodayNav(); renderToday(); }
+    else { state.mode = m; saveSettings(); renderAll(); }
+  }
+  // 可见性：年级课程全显示；我的课程仅显示已选（按当前页面的模式判定）
   function courseKey(c) { return c.name + '|' + (c.className || ''); }
   function isVisible(c) {
-    if (state.mode === 'mine') return !!state.mine[courseKey(c)];
+    var m = modeFor(state.tab);
+    if (m === 'mine') return !!state.mine[courseKey(c)];
     return true;
   }
 
@@ -148,8 +156,8 @@
     $('weeknav').hidden = !isTT;
     $('todaynav').hidden = !isTD;
     $('main').classList.toggle('fit', isTT);
-    $('modename').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
-    $('modename2').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
+    $('modename').textContent = (state.mode || 'grade') === 'mine' ? '我的课程' : '年级课程';
+    $('modename2').textContent = (state.todayMode || 'grade') === 'mine' ? '我的课程' : '年级课程';
     renderWeekNav();
     if (isTD) renderTodayNav();
     renderTimetable();
@@ -182,6 +190,8 @@
   // 课程模式选择：标题下方下拉菜单（年级课程 / 我的课程）
   function showModePicker(anchorId) {
     var anchor = $(anchorId || 'pagetitle');
+    var forToday = anchorId === 'pagetitle2';
+    var curMode = forToday ? (state.todayMode || 'grade') : (state.mode || 'grade');
     var mineN = Object.keys(state.mine).length;
     var menu = $('modemenu');
     var panel = menu.querySelector('.mm-panel');
@@ -189,7 +199,7 @@
       { m: 'grade', ico: '📅', bg: '#5A9DBD', name: '年级课程', desc: '全年级课表' },
       { m: 'mine', ico: '⭐', bg: '#E0B092', name: '我的课程', desc: mineN ? '已选 ' + mineN + ' 门课程' : '还未添加课程' }
     ].map(function (it) {
-      return '<button class="mm-item' + (state.mode === it.m ? ' cur' : '') + '" data-m="' + it.m + '">' +
+      return '<button class="mm-item' + (curMode === it.m ? ' cur' : '') + '" data-m="' + it.m + '">' +
         '<span class="mm-ico" style="background:' + it.bg + '">' + it.ico + '</span>' +
         '<span class="mm-body"><span class="mm-name">' + it.name + '</span><span class="mm-desc">' + it.desc + '</span></span>' +
         '<span class="mm-check">✓</span></button>';
@@ -201,9 +211,8 @@
     panel.style.top = (r.bottom + 8) + 'px';
     panel.querySelectorAll('.mm-item').forEach(function (b) {
       b.onclick = function () {
-        state.mode = b.getAttribute('data-m');
+        setModeFor(forToday ? 'today' : 'timetable', b.getAttribute('data-m'));
         hideModePicker();
-        saveSettings(); renderAll();
       };
     });
   }
@@ -478,10 +487,7 @@
   // 今天页顶栏：左标题 + ‹ 标签 ›（与课表页周切换同版式）
   function renderTodayNav() {
     var off = state.todayOffset || 0;
-    var now = new Date();
-    var d = new Date(now.getTime());
-    d.setDate(d.getDate() + off);
-    $('todaydate').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    $('modename2').textContent = (state.todayMode || 'grade') === 'mine' ? '我的课程' : '年级课程';
     $('daylabel').textContent = offsetName(off);
     $('prevday').disabled = off <= -2;
     $('nextday').disabled = off >= 2;
@@ -578,7 +584,7 @@
         '<div class="meta">' + [it.c.location, it.c.teacher, it.c.slot].filter(Boolean).map(esc).join(' · ') + '</div></div></div>';
     });
     $('today-list').innerHTML = html || '<div class="empty">' +
-      (state.mode === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '当天没有课程') + '</div>';
+      ((state.todayMode || 'grade') === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '当天没有课程') + '</div>';
   }
 
   // 按任意日期取课程（返回 { week, dayIdx, list } 或 null）
