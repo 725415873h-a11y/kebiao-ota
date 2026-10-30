@@ -10,7 +10,7 @@
     5: ['13:30', '14:15'], 6: ['14:20', '15:05'], 7: ['15:25', '16:10'], 8: ['16:15', '17:00'],
     9: ['18:30', '19:15'], 10: ['19:20', '20:05'], 11: ['20:10', '20:55'], 12: ['21:00', '21:45']
   };
-  var PERIODS_VER = 2; // 节次时间版本：升级默认时间后迁移旧缓存
+  var OTA_URL = 'https://fastly.jsdelivr.net/gh/725415873h-a11y/kebiao-ota@main'; // 内置更新源（fastly 节点缓存刷新最快）
   var DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   var LS = 'gradeSchedule.';
 
@@ -23,32 +23,22 @@
     mode: 'grade',       // grade=年级课程 | mine=我的课程
     mine: {},            // key -> true，我的课程集合
     docId: DEFAULT_DOC_ID,
-    classFilter: '',
-    selected: {},        // 年级模式下 key -> false 表示隐藏（旧配置兼容）
-    periodTimes: JSON.parse(JSON.stringify(DEFAULT_PERIODS)),
     remindOn: false,
     remindLead: 15,
     icsAllday: true,
     notified: {},        // 提醒去重
-    otaUrl: ''           // 软件更新源
+    otaUrl: OTA_URL      // 软件更新源（内置）
   };
 
   function loadSettings() {
     try {
       var s = JSON.parse(localStorage.getItem(LS + 'settings') || '{}');
-      if (s.classFilter !== undefined) state.classFilter = s.classFilter;
-      if (s.selected) state.selected = s.selected;
-      if (s.periodTimes) state.periodTimes = s.periodTimes;
-      if (s.periodsVer !== PERIODS_VER) {
-        // 旧版本默认节次时间 → 迁移为官方作息时间（保留用户真实自定义的可能性低，直接覆盖）
-        state.periodTimes = JSON.parse(JSON.stringify(DEFAULT_PERIODS));
-      }
       if (s.remindOn !== undefined) state.remindOn = s.remindOn;
       if (s.remindLead) state.remindLead = s.remindLead;
       if (s.icsAllday !== undefined) state.icsAllday = s.icsAllday;
       if (s.docId) state.docId = s.docId;
-      if (s.otaUrl !== undefined) state.otaUrl = s.otaUrl;
       if (s.mode === 'mine' || s.mode === 'grade') state.mode = s.mode;
+      if (s.todayMode === 'mine' || s.todayMode === 'grade') state.todayMode = s.todayMode;
       if (s.mine) state.mine = s.mine;
     } catch (e) { /* 忽略损坏的本地设置 */ }
     var cached = localStorage.getItem(LS + 'data');
@@ -67,10 +57,7 @@
   }
   function saveSettings() {
     localStorage.setItem(LS + 'settings', JSON.stringify({
-      classFilter: state.classFilter, selected: state.selected, periodTimes: state.periodTimes,
-      periodsVer: PERIODS_VER,
-      mode: state.mode, mine: state.mine,
-      otaUrl: state.otaUrl || '',
+      mode: state.mode, todayMode: state.todayMode || 'grade', mine: state.mine,
       remindOn: state.remindOn, remindLead: state.remindLead, icsAllday: state.icsAllday, docId: state.docId
     }));
   }
@@ -87,15 +74,16 @@
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function hashHue(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h >>> 0; }
   // 低饱和课程色板（借鉴 west2-online/fzuhelper）
-  var PALETTE = ['#7A6068', '#8D5270', '#5A9DBD', '#307D81', '#B99799', '#AA9CC6', '#A2CAE7', '#619AA0', '#D8B4BB', '#E5B9D3', '#5BB3DD', '#94C096', '#D07A88', '#F0C4A9', '#92BAC5', '#9AD1CD', '#F39E9D', '#E0B092', '#7D89AB', '#BBD5B4', '#C6A5B6', '#87B9C1', '#E3A8A1', '#A5C7A6', '#D4B8CE'];
+  // 仅深色（白字对比度充足，亮度均 < 125）
+  var PALETTE = ['#7A6068', '#8D5270', '#3A82A8', '#2E7377', '#8B7396', '#527F98', '#4C8376', '#B0656F', '#96687E', '#58779E', '#C0747E', '#8C5A4A', '#6B5E8C', '#8C6E56', '#A05C74', '#5B7A56', '#7E5D74', '#4E6E78', '#98576B', '#6E5E50'];
   function courseColor(c) { return PALETTE[hashHue(c.name + (c.className || '')) % PALETTE.length]; }
   function textOn(hex) {
     var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 190 ? '#33404f' : '#ffffff';
   }
 
-  function periodStart(p) { var t = state.periodTimes[p] || DEFAULT_PERIODS[p]; return t ? t[0] : null; }
-  function periodEnd(p) { var t = state.periodTimes[p] || DEFAULT_PERIODS[p]; return t ? t[1] : null; }
+  function periodStart(p) { var t = DEFAULT_PERIODS[p]; return t ? t[0] : null; }
+  function periodEnd(p) { var t = DEFAULT_PERIODS[p]; return t ? t[1] : null; }
   function courseTimes(c) {
     if (!c.periods) return null;
     var s = periodStart(c.periods[0]), e = periodEnd(c.periods[1]);
@@ -103,12 +91,17 @@
   }
   function minutesOf(hm) { var a = hm.split(':'); return (+a[0]) * 60 + (+a[1]); }
 
-  // 可见性：班级过滤 + 用户选择
+  // 模式独立：课表页与今天页各自记忆（mode=课表页, todayMode=今天页）
+  function modeFor(tab) { return tab === 'today' ? (state.todayMode || 'grade') : (state.mode || 'grade'); }
+  function setModeFor(tab, m) {
+    if (tab === 'today') { state.todayMode = m; saveSettings(); renderTodayNav(); renderToday(); }
+    else { state.mode = m; saveSettings(); renderAll(); }
+  }
+  // 可见性：年级课程全显示；我的课程仅显示已选（按当前页面的模式判定）
   function courseKey(c) { return c.name + '|' + (c.className || ''); }
   function isVisible(c) {
-    if (state.mode === 'mine') return !!state.mine[courseKey(c)];
-    if (state.selected[courseKey(c)] === false) return false;
-    if (c.className && state.classFilter && c.className !== state.classFilter) return false;
+    var m = modeFor(state.tab);
+    if (m === 'mine') return !!state.mine[courseKey(c)];
     return true;
   }
 
@@ -130,6 +123,8 @@
   var dataSource = 'none'; // snapshot | cache
   var pendingRefreshResolve = null; // APK 后台抓取期间挂起的下拉刷新回调
   var slideDir = 0; // 周切换动画方向：+1 下一周（右入），-1 上一周（左入）
+  var cycTimer = null;   // 重叠轮播定时器（模块级防泄漏）
+  var cycleState = {};   // 各重叠卡当前显示序号
 
   function applyData(j, source) {
     state.data = { weeks: j.weeks, classes: j.classes, meta: j.meta || {} };
@@ -156,11 +151,15 @@
   // ---------- 渲染 ----------
   function renderAll() {
     var isTT = state.tab === 'timetable';
-    $('topbar-title').hidden = isTT;
+    var isTD = state.tab === 'today';
+    $('topbar-title').hidden = isTT || isTD;
     $('weeknav').hidden = !isTT;
+    $('todaynav').hidden = !isTD;
     $('main').classList.toggle('fit', isTT);
-    $('modename').textContent = state.mode === 'mine' ? '我的课程' : '年级课程';
+    $('modename').textContent = (state.mode || 'grade') === 'mine' ? '我的课程' : '年级课程';
+    $('modename2').textContent = (state.todayMode || 'grade') === 'mine' ? '我的课程' : '年级课程';
     renderWeekNav();
+    if (isTD) renderTodayNav();
     renderTimetable();
     renderToday();
     renderSettings();
@@ -186,38 +185,44 @@
       $('prevweek').disabled = state.data.weeks[0].week >= w.week;
       $('nextweek').disabled = state.data.weeks[state.data.weeks.length - 1].week <= w.week;
     }
+    // 非“本周”时显示右侧回位按钮
+    var loc = findTodayLocation();
+    $('backtoday-week').hidden = !loc || loc.week.week === w.week;
   }
 
   // 课程模式选择：标题下方下拉菜单（年级课程 / 我的课程）
-  function showModePicker() {
+  function showModePicker(anchorId) {
+    var anchor = $(anchorId || 'pagetitle');
+    var forToday = anchorId === 'pagetitle2';
+    var curMode = forToday ? (state.todayMode || 'grade') : (state.mode || 'grade');
     var mineN = Object.keys(state.mine).length;
     var menu = $('modemenu');
     var panel = menu.querySelector('.mm-panel');
     panel.innerHTML = [
-      { m: 'grade', ico: '📅', bg: '#5A9DBD', name: '年级课程', desc: '全年级课表 · 可按班级过滤' },
+      { m: 'grade', ico: '📅', bg: '#5A9DBD', name: '年级课程', desc: '全年级课表' },
       { m: 'mine', ico: '⭐', bg: '#E0B092', name: '我的课程', desc: mineN ? '已选 ' + mineN + ' 门课程' : '还未添加课程' }
     ].map(function (it) {
-      return '<button class="mm-item' + (state.mode === it.m ? ' cur' : '') + '" data-m="' + it.m + '">' +
+      return '<button class="mm-item' + (curMode === it.m ? ' cur' : '') + '" data-m="' + it.m + '">' +
         '<span class="mm-ico" style="background:' + it.bg + '">' + it.ico + '</span>' +
         '<span class="mm-body"><span class="mm-name">' + it.name + '</span><span class="mm-desc">' + it.desc + '</span></span>' +
         '<span class="mm-check">✓</span></button>';
     }).join('');
     menu.hidden = false;
-    $('pagetitle').classList.add('open');
-    var r = $('pagetitle').getBoundingClientRect();
+    anchor.classList.add('open');
+    var r = anchor.getBoundingClientRect();
     panel.style.left = Math.max(10, r.left - 8) + 'px';
     panel.style.top = (r.bottom + 8) + 'px';
     panel.querySelectorAll('.mm-item').forEach(function (b) {
       b.onclick = function () {
-        state.mode = b.getAttribute('data-m');
+        setModeFor(forToday ? 'today' : 'timetable', b.getAttribute('data-m'));
         hideModePicker();
-        saveSettings(); renderAll();
       };
     });
   }
   function hideModePicker() {
     $('modemenu').hidden = true;
     $('pagetitle').classList.remove('open');
+    $('pagetitle2') && $('pagetitle2').classList.remove('open');
   }
 
   // 周次下拉选择（移植 fzuhelper 的周切换交互）
@@ -297,11 +302,10 @@
     // 仅在「我的课程」完全为空时给出引导；普通空周不提示、不改动布局
     var mineEmpty = state.mode === 'mine' && !Object.keys(state.mine).length;
     $('tt-empty').hidden = !mineEmpty;
-    if (mineEmpty) $('tt-empty').textContent = '我的课程还是空的：点头部的「年级课程」切回后点课程卡片加入，或在设置中按班级生成';
+    if (mineEmpty) $('tt-empty').textContent = '我的课程还是空的，点头部的「年级课程」切回后点课程卡片加入，或在设置中按班级生成';
 
     var activeP = currentPeriod();
     var html = '';
-    if (todayIdx >= 0) html += '<div class="todaycol" style="grid-column:' + (todayIdx + 2) + ';grid-row:1/-1;"></div>';
     // 左侧节次列：节次号 + 起止时间，当前节高亮
     for (var p = 1; p <= 12; p++) {
       var t0 = periodStart(p), t1 = periodEnd(p);
@@ -316,22 +320,22 @@
       if (!it.c.periods) { (eventsByDay[it.d] = eventsByDay[it.d] || []).push(it.c); }
     });
 
-    // 课程：同一时段多门时只显示第一门；时段重叠的课聚成簇，主卡全宽+角标数，点击弹层看全部
+    // 课程：按 (天,起始节) 全量收集；重叠课聚簇，主卡全宽 + 右上角标（重叠数），点击弹列表（fzuhelper 方式）
     var groups = {};
     items.forEach(function (it) {
       var c = it.c;
       if (!c.periods) return;
-      var key = it.d + '@' + c.periods[0];
-      if (!groups[key]) groups[key] = { d: it.d, p1: c.periods[0], c: c };
+      var key = it.d + '@' + c.periods[0] + '#' + courseKey(c);
+      groups[key] = { d: it.d, p1: c.periods[0], c: c };
     });
     var byDay = {};
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
       (byDay[g.d] = byDay[g.d] || []).push({ p1: g.p1, p2: g.c.periods[1], key: key });
     });
-    var clusterOf = {}; // key -> { members:[{p1,p2,key}], primaryKey }
+    var clusterOf = {}; // key -> { members, primary }
     Object.keys(byDay).forEach(function (d) {
-      var list = byDay[d].sort(function (a, b) { return a.p1 - b.p1; });
+      var list = byDay[d].sort(function (a, b) { return a.p1 - b.p1 || a.p2 - b.p2; });
       var clusters = [], cur = null, curEnd = -1;
       list.forEach(function (it) {
         if (!cur || it.p1 > curEnd) { cur = [it]; clusters.push(cur); curEnd = it.p2; }
@@ -341,16 +345,21 @@
         var primary = cl.slice().sort(function (a, b) {
           return (b.p2 - b.p1) - (a.p2 - a.p1) || a.p1 - b.p1;
         })[0];
-        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primaryKey: primary.key }; });
+        // 我的课程成员优先当主卡（锁定显示，不轮播）
+        var mineKey = null;
+        cl.forEach(function (it) { if (!mineKey && state.mine[courseKey(groups[it.key].c)]) mineKey = it.key; });
+        if (mineKey) primary = { key: mineKey };
+        cl.forEach(function (it) { clusterOf[it.key] = { members: cl, primary: primary.key, mineLock: !!mineKey }; });
       });
     });
     Object.keys(groups).forEach(function (key) {
       var g = groups[key];
-      if (clusterOf[key].primaryKey !== key) return; // 非主卡不渲染
+      if (clusterOf[key].primary !== key) return; // 非主卡不渲染（重叠课由主卡轮播展示）
       var c = g.c;
       var col = courseColor(c);
-      var badge = clusterOf[key].members.length > 1 ? '<i class="ovbadge">' + clusterOf[key].members.length + '</i>' : '';
-      html += '<div class="course" data-d="' + g.d + '" data-p="' + g.p1 + '" style="grid-column:' + (g.d + 2) +
+      var n = clusterOf[key].members.length;
+      var badge = n > 1 ? '<i class="ovbadge">' + n + '</i>' : '';
+      html += '<div class="course' + (n > 1 ? ' cyc' : '') + '" data-k="' + esc(clusterOf[key].primary) + '" style="grid-column:' + (g.d + 2) +
         ';grid-row:' + rowOf(g.p1) + '/' + (rowOf(c.periods[1]) + 1) + ';background-color:' + col + ';color:#fff;">' +
         badge +
         '<div class="cname">' + esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '') + '</div>' +
@@ -358,6 +367,34 @@
         '</div>';
     });
     body.innerHTML = html;
+
+    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程；锁定我的课程成员的簇不轮播
+    function startCycle() {
+      if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
+      cycTimer = setInterval(function () {
+        var cards = body.querySelectorAll('.course.cyc');
+        if (!cards.length) return;
+        cards.forEach(function (el) {
+          var key = el.getAttribute('data-k');
+          var cl = clusterOf[key];
+          if (cl.mineLock) return; // 我的课程锁定，不轮播
+          var cur = cycleState[key] || 0;
+          var next = (cur + 1) % cl.members.length;
+          cycleState[key] = next;
+          var c = groups[cl.members[next].key].c;
+          var col = courseColor(c);
+          el.style.transition = 'opacity .25s';
+          el.style.opacity = '0.25';
+          setTimeout(function () {
+            el.style.backgroundColor = col;
+            el.querySelector('.cname').innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
+            el.querySelector('.croom').textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
+            el.style.opacity = '1';
+          }, 250);
+        });
+      }, 2000);
+    }
+    startCycle();
 
     // 事件卡片（不排课等）：纵向铺满当天整列，多个事件时均分
     Object.keys(eventsByDay).forEach(function (d) {
@@ -376,19 +413,18 @@
       });
     });
 
-    // 课程点击：重叠簇弹列表，普通课弹详情
+    // 课程点击：重叠簇弹列表（角标卡），普通课弹详情
     body.querySelectorAll('.course:not(.no-class)').forEach(function (el) {
       el.onclick = function () {
-        var d = +el.getAttribute('data-d'), p = +el.getAttribute('data-p');
-        var key = d + '@' + p;
+        var key = el.getAttribute('data-k');
         var g = groups[key];
         if (!g) return;
         var cl = clusterOf[key];
         if (cl && cl.members.length > 1) {
           var list = cl.members.map(function (m) { return groups[m.key].c; });
-          showCourseListModal(list, d, w);
+          showCourseListModal(list, g.d, w);
         } else {
-          showCourseModal(g.c, d, w);
+          showCourseModal(g.c, g.d, w);
         }
       };
     });
@@ -444,35 +480,87 @@
     return { week: loc.week, dayIdx: loc.dayIdx, list: list };
   }
 
-  function renderToday() {
-    var tc = todayCourses();
+  // 今天页查看日期偏移（0=今天）
+  state.todayOffset = state.todayOffset || 0;
+
+  function offsetName(off) {
+    return off === 0 ? '今天' : off === -1 ? '昨天' : off === 1 ? '明天' : off === -2 ? '前天' : '后天';
+  }
+
+  // 今天页顶栏：左标题 + ‹ 标签 ›（与课表页周切换同版式）
+  function renderTodayNav() {
+    var off = state.todayOffset || 0;
+    $('modename2').textContent = (state.todayMode || 'grade') === 'mine' ? '我的课程' : '年级课程';
+    $('daylabel').textContent = offsetName(off);
+    $('prevday').disabled = off <= -2;
+    $('nextday').disabled = off >= 2;
+    // 非“今天”时显示右侧回位按钮
+    $('backtoday-day').hidden = off === 0;
+  }
+
+  // 日期选择弹层（点顶栏中间标签，同周次列表样式）
+  function showDayPicker() {
     var now = new Date();
-    if (!tc.week) {
-      $('today-head').innerHTML = '<div class="big">' + todayStr(now) + '</div><div class="sub">今天不在课表范围内</div>';
+    var html = '';
+    for (var i = -2; i <= 2; i++) {
+      var d = new Date(now.getTime());
+      d.setDate(d.getDate() + i);
+      html += '<button class="witem' + ((state.todayOffset || 0) === i ? ' cur' : '') + '" data-off="' + i + '">' +
+        '<span>' + offsetName(i) + '</span><span class="wd">' + (d.getMonth() + 1) + '.' + d.getDate() + ' · ' + DAY_NAMES[(d.getDay() + 6) % 7] + '</span></button>';
+    }
+    openModal(html, '', null);
+    $('modal-body').querySelectorAll('.witem').forEach(function (b) {
+      b.onclick = function () {
+        state.todayOffset = +b.getAttribute('data-off');
+        closeModal();
+        renderTodayNav();
+        renderToday();
+      };
+    });
+  }
+
+  function renderToday() {
+    var now = new Date();
+    var prevOffset = state._todayPrevOffset;
+    var curOffset = state.todayOffset || 0;
+    state._todayPrevOffset = curOffset;
+    // 切天滑动动画（方向由偏移变化决定）
+    if (prevOffset !== undefined && prevOffset !== curOffset) {
+      var vw = $('view-today');
+      vw.classList.remove('slide-next', 'slide-prev');
+      void vw.offsetWidth;
+      vw.classList.add(curOffset > prevOffset ? 'slide-next' : 'slide-prev');
+    }
+    var viewDate = new Date(now.getTime());
+    viewDate.setDate(viewDate.getDate() + curOffset);
+
+    var tc = dateCourses(viewDate);
+    if (!tc) {
       $('next-card').style.display = 'none';
-      $('today-list').innerHTML = '';
+      $('today-list').innerHTML = '<div class="empty">不在课表范围内</div>';
       return;
     }
-    var dt = tc.week.dates[tc.dayIdx];
-    $('today-head').innerHTML = '<div class="big">今天 · ' + DAY_NAMES[tc.dayIdx] + '</div>' +
-      '<div class="sub">' + dt.date + '（第' + tc.week.week + '周）</div>' +
-      (tc.week.notes.length ? '<div class="sub">📌 ' + esc(tc.week.notes.join('；')) + '</div>' : '');
+    var isToday = (state.todayOffset || 0) === 0;
+    // 周次/备注信息并入下节课卡片下方副标题
+    var weekInfo = '第' + tc.week.week + '周' + (isToday ? '' : '　' + (tc.week.dates[tc.dayIdx] ? tc.week.dates[tc.dayIdx].date : ''));
 
-    // 下节课卡片
+    // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
     var nowMin = now.getHours() * 60 + now.getMinutes();
     var next = null, current = null;
-    tc.list.forEach(function (it) {
-      if (!it.t) return;
-      var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
-      if (nowMin >= s && nowMin < e) current = it;
-      if (!next && nowMin < s) next = it;
-    });
+    if (isToday) {
+      tc.list.forEach(function (it) {
+        if (!it.t) return;
+        var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
+        if (nowMin >= s && nowMin < e) current = it;
+        if (!next && nowMin < s) next = it;
+      });
+    }
     var nc = $('next-card');
     var focus = current || next;
-    if (focus) {
+    if (focus && isToday) {
       nc.className = '';
       nc.style.display = '';
-      nc.innerHTML = '<div class="label">' + (current ? '正在进行' : '下一节课') + '</div>' +
+      nc.innerHTML = '<div class="label">' + (current ? '正在进行' : '下一节课') + ' · ' + weekInfo + '</div>' +
         '<div class="main">' + esc(focus.c.name) + (focus.c.className ? ' @' + esc(focus.c.className) : '') + '</div>' +
         '<div class="sub">' + focus.t.start + ' - ' + focus.t.end + (focus.c.location ? ' · ' + esc(focus.c.location) : '') +
         (focus.c.teacher ? ' · ' + esc(focus.c.teacher) : '') + '</div>' +
@@ -480,15 +568,17 @@
           ? '还有 ' + (minutesOf(focus.t.end) - nowMin) + ' 分钟下课'
           : (function () { var m = minutesOf(focus.t.start) - nowMin; return m >= 60 ? Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分钟后上课' : m + ' 分钟后上课'; })()) + '</div>';
     } else {
-      // 无当前/下一节课：不显示灰色占位模块
-      nc.style.display = 'none';
+      // 无实时卡片时，用细条显示周次/备注信息
+      nc.className = 'weekinfo';
+      nc.style.display = tc.week.notes.length || !isToday ? '' : 'none';
+      nc.innerHTML = '<span>' + weekInfo + '</span>' + (tc.week.notes.length ? '<span>📌 ' + esc(tc.week.notes.join('；')) + '</span>' : '');
     }
 
     // 列表
     var html = '';
     tc.list.forEach(function (it) {
       var cls = 'titem';
-      if (it.t) {
+      if (it.t && isToday) {
         var s = minutesOf(it.t.start), e = minutesOf(it.t.end);
         if (nowMin >= e) cls += ' past';
         else if (nowMin >= s) cls += ' now';
@@ -499,21 +589,36 @@
         '<div class="meta">' + [it.c.location, it.c.teacher, it.c.slot].filter(Boolean).map(esc).join(' · ') + '</div></div></div>';
     });
     $('today-list').innerHTML = html || '<div class="empty">' +
-      (state.mode === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '今天没有课程') + '</div>';
+      ((state.todayMode || 'grade') === 'mine' && !Object.keys(state.mine).length ? '我的课程还是空的<br>点课表卡片「加入我的课程」或在设置中按班级生成' : '当天没有课程') + '</div>';
+  }
+
+  // 按任意日期取课程（返回 { week, dayIdx, list } 或 null）
+  function dateCourses(date) {
+    if (!state.data) return null;
+    var t = todayStr(date);
+    for (var i = 0; i < state.data.weeks.length; i++) {
+      var w = state.data.weeks[i];
+      for (var d = 0; d < 7; d++) {
+        if (w.dates[d] && w.dates[d].date === t) {
+          var list = [];
+          (w.days[d] || []).forEach(function (c) {
+            if (isVisible(c)) list.push({ c: c, t: courseTimes(c) });
+          });
+          list.sort(function (a, b) {
+            if (!a.t && !b.t) return 0;
+            if (!a.t) return 1;
+            if (!b.t) return -1;
+            return minutesOf(a.t.start) - minutesOf(b.t.start);
+          });
+          return { week: w, dayIdx: d, list: list };
+        }
+      }
+    }
+    return null;
   }
 
   // ---------- 设置 ----------
   function renderSettings() {
-    // 班级 chips
-    var chips = ['<button class="chip ' + (state.classFilter === '' ? 'active' : '') + '" data-cf="">全部</button>'];
-    (state.data ? state.data.classes : []).forEach(function (cl) {
-      chips.push('<button class="chip ' + (state.classFilter === cl ? 'active' : '') + '" data-cf="' + esc(cl) + '">' + esc(cl) + '</button>');
-    });
-    $('classchips').innerHTML = chips.join('');
-    $('classchips').querySelectorAll('.chip').forEach(function (b) {
-      b.onclick = function () { state.classFilter = b.getAttribute('data-cf'); saveSettings(); renderAll(); };
-    });
-
     // 课程清单（我的课程成员编辑）
     var catalog = {};
     if (state.data) {
@@ -561,29 +666,10 @@
       };
     });
 
-    // 节次时间
-    var ph = '';
-    for (var p = 1; p <= 12; p++) {
-      var t = state.periodTimes[p] || DEFAULT_PERIODS[p];
-      ph += '<div class="prow"><span class="pnum">第' + p + '节</span>' +
-        '<input type="time" data-p="' + p + '" data-e="0" value="' + t[0] + '"> - ' +
-        '<input type="time" data-p="' + p + '" data-e="1" value="' + t[1] + '"></div>';
-    }
-    $('periodtimes').innerHTML = '<div class="plist">' + ph + '</div>';
-    $('periodtimes').querySelectorAll('input').forEach(function (inp) {
-      inp.onchange = function () {
-        var p = inp.getAttribute('data-p'), e = +inp.getAttribute('data-e');
-        if (!state.periodTimes[p]) state.periodTimes[p] = DEFAULT_PERIODS[p].slice();
-        state.periodTimes[p][e] = inp.value;
-        saveSettings(); renderAll();
-      };
-    });
-
     $('remindon').checked = state.remindOn;
     $('remindlead').value = String(state.remindLead);
     $('icsallday').checked = state.icsAllday;
     $('opendoc').textContent = window.KebiaoAndroid ? '① 一键在线更新（自动抓取）' : '① 打开腾讯文档';
-    $('otaurl').value = state.otaUrl || '';
     if (window.KebiaoAndroid) {
       var vinfo = (window.KebiaoAndroid.getVersion() || '1|1').split('|');
       $('otastatus').textContent = '当前 UI v' + vinfo[0] + ' · APK v' + vinfo[1];
@@ -706,7 +792,7 @@
     var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (state.mode === 'mine' ? '我的课程' : '年级课表' + (state.classFilter ? '_' + state.classFilter : '')) + '.ics';
+    a.download = (state.mode === 'mine' ? '我的课程' : '年级课表') + '.ics';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
@@ -753,19 +839,25 @@
         ['timetable', 'today', 'settings'].forEach(function (t) {
           $('view-' + t).hidden = t !== state.tab;
         });
-        $('topbar-title').hidden = state.tab === 'timetable';
+        $('topbar-title').hidden = state.tab === 'timetable' || state.tab === 'today';
         $('weeknav').hidden = state.tab !== 'timetable';
+        $('todaynav').hidden = state.tab !== 'today';
         $('main').classList.toggle('fit', state.tab === 'timetable');
-        if (state.tab === 'today') renderToday();
-        // 点「课表」「今天」页签 = 一次隐式刷新（带冷却）
+        if (state.tab === 'today') { renderTodayNav(); renderToday(); }
+        // 点「课表」「今天」页签 = 一次隐式刷新（带冷却）；离开课表页时停轮播
+        if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
+        if (state.tab === 'timetable') renderTimetable();
         if (state.tab === 'timetable' || state.tab === 'today') {
           window.__doRefresh && window.__doRefresh(false);
         }
       };
     });
-    // fzuhelper 风格：标题切换课程模式 + 周次切换（箭头步进 / 点周数弹列表）
+    // fzuhelper 风格：标题切换课程模式（课表页/今天页共用菜单）+ 周次切换
     $('pagetitle').onclick = function () {
-      if ($('modemenu').hidden) showModePicker(); else hideModePicker();
+      if ($('modemenu').hidden) showModePicker('pagetitle'); else hideModePicker();
+    };
+    $('pagetitle2').onclick = function () {
+      if ($('modemenu').hidden) showModePicker('pagetitle2'); else hideModePicker();
     };
     $('modemenu').querySelector('.mm-mask').onclick = hideModePicker;
     $('weeklabel').onclick = showWeekPicker;
@@ -778,6 +870,22 @@
       if (!state.data) return;
       var i = state.data.weeks.findIndex(function (x) { return x.week === state.week; });
       if (i < state.data.weeks.length - 1) { slideDir = 1; state.week = state.data.weeks[i + 1].week; renderWeekNav(); renderTimetable(); }
+    };
+    // 今天页顶栏日期切换（箭头步进 / 点标签弹日期列表）
+    $('daylabel').onclick = showDayPicker;
+    $('prevday').onclick = function () {
+      if ((state.todayOffset || 0) > -2) { state.todayOffset = (state.todayOffset || 0) - 1; renderTodayNav(); renderToday(); }
+    };
+    $('nextday').onclick = function () {
+      if ((state.todayOffset || 0) < 2) { state.todayOffset = (state.todayOffset || 0) + 1; renderTodayNav(); renderToday(); }
+    };
+    // 回位按钮：课表回本周 / 今天页回本天
+    $('backtoday-week').onclick = function () {
+      var loc = findTodayLocation();
+      if (loc) { slideDir = loc.week.week > state.week ? 1 : -1; state.week = loc.week.week; renderWeekNav(); renderTimetable(); }
+    };
+    $('backtoday-day').onclick = function () {
+      state.todayOffset = 0; renderTodayNav(); renderToday();
     };
     $('modal-close').onclick = closeModal;
     document.querySelector('.modal-mask').onclick = closeModal;
@@ -798,7 +906,6 @@
         toast('✅ 通知通道正常', 3000);
       }
     };
-    $('resetperiods').onclick = function () { state.periodTimes = JSON.parse(JSON.stringify(DEFAULT_PERIODS)); saveSettings(); renderAll(); };
     $('selall').onclick = function () {
       if (!state.data) return;
       state.data.weeks.forEach(function (w) { w.days.forEach(function (arr) { arr.forEach(function (c) { state.mine[courseKey(c)] = true; }); }); });
@@ -830,13 +937,10 @@
       if (!raw) { toast('请先粘贴书签脚本复制的内容'); return; }
       importPayloadText(raw);
     };
-    // ---------- 软件在线更新（OTA） ----------
+    // ---------- 软件在线更新（OTA，内置更新源） ----------
     $('otacheck').onclick = function () {
-      var u = $('otaurl').value.trim();
-      state.otaUrl = u; saveSettings();
       if (!window.KebiaoAndroid) { toast('请在 App 内使用在线更新（浏览器直接刷新页面即可）'); return; }
-      if (!u) { toast('请先填写更新源地址（如 http://192.168.x.x:8787）'); return; }
-      window.KebiaoAndroid.otaCheck(u);
+      window.KebiaoAndroid.otaCheck(OTA_URL);
     };
   }
 
@@ -1038,16 +1142,20 @@
     window.__doRefresh = doRefresh;
   }
 
-  // ---------- 左右滑动切换周（touch 事件不受浏览器滚动取消影响；鼠标走 pointer） ----------
+  // ---------- 左右滑动切换（课表页=切周，今天页=切天；touch 事件；鼠标走 pointer） ----------
   function setupWeekSwipe() {
     var main = $('main');
     var x0 = 0, y0 = 0, on = false, consumed = false;
     var check = function (x, y) {
-      if (!on || consumed || state.tab !== 'timetable') return;
+      if (!on || consumed) return;
       var dx = x - x0, dy = y - y0;
       if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) {
         consumed = true;
-        if (dx < 0) $('nextweek').click(); else $('prevweek').click();
+        if (state.tab === 'timetable') {
+          if (dx < 0) $('nextweek').click(); else $('prevweek').click();
+        } else if (state.tab === 'today') {
+          if (dx < 0) $('nextday').click(); else $('prevday').click();
+        }
       }
     };
     var end = function () { on = false; consumed = false; };

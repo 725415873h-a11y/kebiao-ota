@@ -368,7 +368,8 @@
     });
     body.innerHTML = html;
 
-    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程；锁定我的课程成员的簇不轮播
+    // 重叠簇轮播：主卡每 2 秒切换显示下一门被折叠课程；锁定我的课程成员的簇不轮播。
+    // 直接换内容不做透明过渡（半透明叠白底会被看成浅色）
     function startCycle() {
       if (cycTimer) { clearInterval(cycTimer); cycTimer = null; }
       cycTimer = setInterval(function () {
@@ -382,15 +383,9 @@
           var next = (cur + 1) % cl.members.length;
           cycleState[key] = next;
           var c = groups[cl.members[next].key].c;
-          var col = courseColor(c);
-          el.style.transition = 'opacity .25s';
-          el.style.opacity = '0.25';
-          setTimeout(function () {
-            el.style.backgroundColor = col;
-            el.querySelector('.cname').innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
-            el.querySelector('.croom').textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
-            el.style.opacity = '1';
-          }, 250);
+          el.style.backgroundColor = courseColor(c);
+          el.querySelector('.cname').innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
+          el.querySelector('.croom').textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
         });
       }, 2000);
     }
@@ -541,8 +536,7 @@
       return;
     }
     var isToday = (state.todayOffset || 0) === 0;
-    // 周次/备注信息并入下节课卡片下方副标题
-    var weekInfo = '第' + tc.week.week + '周' + (isToday ? '' : '　' + (tc.week.dates[tc.dayIdx] ? tc.week.dates[tc.dayIdx].date : ''));
+    var weekInfo = '第' + tc.week.week + '周';
 
     // 下节课卡片（仅看今天时显示实时状态；其他日期只列课程）
     var nowMin = now.getHours() * 60 + now.getMinutes();
@@ -568,10 +562,8 @@
           ? '还有 ' + (minutesOf(focus.t.end) - nowMin) + ' 分钟下课'
           : (function () { var m = minutesOf(focus.t.start) - nowMin; return m >= 60 ? Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分钟后上课' : m + ' 分钟后上课'; })()) + '</div>';
     } else {
-      // 无实时卡片时，用细条显示周次/备注信息
-      nc.className = 'weekinfo';
-      nc.style.display = tc.week.notes.length || !isToday ? '' : 'none';
-      nc.innerHTML = '<span>' + weekInfo + '</span>' + (tc.week.notes.length ? '<span>📌 ' + esc(tc.week.notes.join('；')) + '</span>' : '');
+      // 无实时课程：不显示占位模块
+      nc.style.display = 'none';
     }
 
     // 列表
@@ -619,6 +611,28 @@
 
   // ---------- 设置 ----------
   function renderSettings() {
+    // 顶部快照：本周课程概览 + 数据时间（便于与腾讯文档原文核对）
+    var snap = '';
+    if (state.data) {
+      var w = currentWeekObj();
+      var d0 = w.dates[0], d6 = w.dates[6];
+      snap += '<div class="snapline"><b>第' + w.week + '周</b>（' + (d0 ? d0.date : '') + ' ~ ' + (d6 ? d6.date : '') + '）</div>';
+      var seen = {};
+      var total = 0;
+      w.days.forEach(function (arr) { arr.forEach(function (c) { total++; seen[courseKey(c)] = true; }); });
+      snap += '<div class="snapline">本周共 ' + total + ' 门课 · ' + Object.keys(seen).length + ' 种</div>';
+      for (var d = 0; d < 7; d++) {
+        var names = [];
+        (w.days[d] || []).forEach(function (c) { if (names.indexOf(c.name) < 0) names.push(c.name); });
+        snap += '<div class="snapday"><span>' + DAY_NAMES[d] + '</span>' + (names.length ? esc(names.join('、')) : '—') + '</div>';
+      }
+      var ts = state.data.meta && (state.data.meta.fetchedAt || state.data.meta.generatedAt);
+      if (ts) snap += '<div class="snapline snapts">数据更新：' + ts.replace('T', ' ').slice(0, 16) + '</div>';
+    } else {
+      snap = '<div class="snapline">暂无数据</div>';
+    }
+    $('docsnap').innerHTML = snap;
+
     // 课程清单（我的课程成员编辑）
     var catalog = {};
     if (state.data) {
@@ -633,22 +647,6 @@
       });
     }
     var keys = Object.keys(catalog).sort(function (a, b) { return catalog[a].name.localeCompare(catalog[b].name, 'zh'); });
-
-    // 快速生成：按班级 / 公共课批量加入我的课程
-    var genChips = (state.data ? state.data.classes : []).concat(['公共课']).map(function (cl) {
-      return '<button class="chip" data-gen="' + esc(cl) + '">＋ ' + esc(cl) + '</button>';
-    });
-    $('minegen').innerHTML = genChips.join('');
-    $('minegen').querySelectorAll('.chip').forEach(function (b) {
-      b.onclick = function () {
-        var cl = b.getAttribute('data-gen');
-        keys.forEach(function (k) {
-          if (cl === '公共课' ? !catalog[k].className : catalog[k].className === cl) state.mine[k] = true;
-        });
-        saveSettings(); renderAll();
-        toast('已把 ' + esc(cl) + ' 相关课程加入我的课程', 3000);
-      };
-    });
 
     $('courselist').innerHTML = keys.map(function (k) {
       var it = catalog[k];

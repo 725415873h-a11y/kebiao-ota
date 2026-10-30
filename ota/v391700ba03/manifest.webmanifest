@@ -1,0 +1,17 @@
+{
+  "name": "天大福州",
+  "short_name": "课表",
+  "description": "全年级课程表：选课、导出日历、上课提醒",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1a73e8",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
