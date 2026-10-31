@@ -727,13 +727,6 @@
       if (window.KebiaoAndroid) window.KebiaoAndroid.docSnapAuto(state.docId, String(row));
       else toast('自动截图需在 App 内使用（网页版请直接截取课表页或用系统截图）');
     };
-
-    // 手动模式：打开文档原文（主 WebView + 浮动截图按钮）
-    $('opendocsnap').onclick = function () {
-      var row = weekRowFor(state.week);
-      if (window.KebiaoAndroid) window.KebiaoAndroid.openDocSnap(state.docId, String(row));
-      else toast('手动截图需在 App 内使用');
-    };
     var catalog = {};
     if (state.data) {
       state.data.weeks.forEach(function (w) {
