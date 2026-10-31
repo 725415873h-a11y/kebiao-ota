@@ -1304,10 +1304,16 @@
     });
   }
 
-  // ---------- 快照全屏预览（双指缩放/拖动/双击切换/✕关闭） ----------
-  var snapView = { scale: 1, tx: 0, ty: 0, p1: null, p2: null, dist: 0, lastTap: 0 };
+  // ---------- 快照全屏预览（横图自动转竖向铺满；双指缩放/拖动/双击切换/旋转/✕关闭） ----------
+  var snapView = { scale: 1, tx: 0, ty: 0, rot: 0, p1: null, p2: null, dist: 0, lastTap: 0 };
   function applySnapView() {
-    $('snapview-img').style.transform = 'translate(' + snapView.tx + 'px,' + snapView.ty + 'px) scale(' + snapView.scale + ')';
+    $('snapview-img').style.transform = 'translate(' + snapView.tx + 'px,' + snapView.ty + 'px) rotate(' + snapView.rot + 'deg) scale(' + snapView.scale + ')';
+  }
+  function setSnapRot(r) {
+    snapView.rot = r;
+    $('snapview-img').classList.toggle('rot', r === 90);
+    snapView.scale = 1; snapView.tx = 0; snapView.ty = 0;
+    applySnapView();
   }
   function resetSnapView() { snapView.scale = 1; snapView.tx = 0; snapView.ty = 0; applySnapView(); }
   function openSnapPreview() {
@@ -1317,17 +1323,23 @@
     }
     if (!src) src = $('shotimg').src || '';
     if (!src) { toast('还没有快照，先点「自动截图当周」'); return; }
-    $('snapview-img').src = src;
+    var img = $('snapview-img');
+    img.onload = function () {
+      // 横版截图在竖屏上默认转 90°铺满（屏幕仍是竖向，转手机或点 ⟳ 换向）
+      setSnapRot(img.naturalWidth > img.naturalHeight ? 90 : 0);
+    };
+    img.src = src;
     $('snapview').hidden = false;
-    resetSnapView();
+    setSnapRot(0);
   }
   function initSnapPreview() {
     var ov = $('snapview');
     if (!ov) return;
-    function tdist(a, b) { var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY; return Math.sqrt(dx * dx + dy * dy); }
-    ov.addEventListener('touchstart', function (e) {
-      // ✕ 按钮放行：preventDefault 会吞掉合成 click，导致关不掉
-      if (e.target && e.target.id === 'snapview-close') return;
+    function tdist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+    function onDown(e) {
+      // ✕/⟳ 按钮放行：preventDefault 会吞掉合成 click，导致点不动
+      var tid = e.target && e.target.id;
+      if (tid === 'snapview-close' || tid === 'snapview-rot') return;
       if (e.touches.length === 1) {
         snapView.p1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       } else if (e.touches.length >= 2) {
@@ -1336,7 +1348,8 @@
         snapView.dist = tdist(snapView.p1, snapView.p2);
       }
       e.preventDefault();
-    }, { passive: false });
+    }
+    ov.addEventListener('touchstart', onDown, { passive: false });
     ov.addEventListener('touchmove', function (e) {
       e.preventDefault();
       if (e.touches.length === 1 && snapView.p1) {
@@ -1353,8 +1366,13 @@
           var ns = Math.min(8, Math.max(1, snapView.scale * d / snapView.dist));
           var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
           var k = ns / snapView.scale;
-          snapView.tx = cx - (cx - snapView.tx) * k;
-          snapView.ty = cy - (cy - snapView.ty) * k;
+          // transform-origin 为元素中心：缩放固定点公式需扣除布局中心 L，
+          // 保证手指下的图像点保持在原位（否则图片会飘出屏幕）
+          var img = $('snapview-img');
+          var lx = img.offsetLeft + img.offsetWidth / 2;
+          var ly = img.offsetTop + img.offsetHeight / 2;
+          snapView.tx = k * snapView.tx + (1 - k) * (cx - lx);
+          snapView.ty = k * snapView.ty + (1 - k) * (cy - ly);
           snapView.scale = ns;
           applySnapView();
         }
@@ -1362,7 +1380,7 @@
         snapView.p1 = a; snapView.p2 = b;
       }
     }, { passive: false });
-    ov.addEventListener('touchend', function (e) {
+    function onUp(e) {
       if (e.touches.length === 0) {
         var now = Date.now();
         if (now - snapView.lastTap < 300) {
@@ -1376,11 +1394,18 @@
         snapView.p2 = null; snapView.dist = 0;
         snapView.p1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
-    });
-    $('snapview-close').addEventListener('click', function () {
+    }
+    ov.addEventListener('touchend', onUp);
+    ov.addEventListener('touchcancel', function () {
+      snapView.p1 = snapView.p2 = null; snapView.dist = 0;
+      if (snapView.scale <= 1.01) resetSnapView();
+    });    $('snapview-close').addEventListener('click', function () {
       ov.hidden = true;
       $('snapview-img').src = '';
       resetSnapView();
+    });
+    $('snapview-rot').addEventListener('click', function () {
+      setSnapRot(snapView.rot === 90 ? 0 : 90);
     });
     $('shotimg').addEventListener('click', openSnapPreview);
   }
