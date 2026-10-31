@@ -134,12 +134,18 @@ body { background: var(--card); }
 #view-today.slide-prev { animation: kbSlidePrev .3s cubic-bezier(.22, .61, .36, 1) both; }
 #view-timetable { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0; }
 .empty { text-align: center; color: #98a3b1; font-size: 13px; padding: 48px 20px; background: none; }
+#tt-empty {
+  position: absolute; top: 58%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center; color: #98a3b1; font-size: 13px; padding: 0 20px;
+  pointer-events: none; z-index: 3; background: none; margin: 0;
+}
 
 /* 课表网格：整体压进一屏，左侧节次列 */
 /* 课表网格：全出血铺满（对齐 fzuhelper） */
 #gridwrap {
   background: var(--card); flex: 1; display: flex; flex-direction: column; min-height: 0;
   border-radius: 0; border: none;
+  position: relative;
 }
 .grid-row { display: grid; grid-template-columns: 30px repeat(7, 1fr); }
 #gridheader {
@@ -176,7 +182,7 @@ body { background: var(--card); }
 #gridbody {
   flex: 1; min-height: 0; display: grid;
   grid-template-columns: 30px repeat(7, 1fr);
-  grid-template-rows: repeat(12, minmax(42px, auto));
+  grid-template-rows: repeat(12, minmax(52px, 1fr));
   align-content: stretch;
 }
 #gridbody.slide-next { animation: kbSlideNext .3s cubic-bezier(.22, .61, .36, 1) both; }
@@ -186,11 +192,11 @@ body { background: var(--card); }
 .grid-row .slotcol { font-size: 10px; color: var(--muted); text-align: center; padding-top: 2px; }
 .plabel {
   grid-column: 1; align-self: stretch; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px;
-  font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1;
+  align-items: center; justify-content: center; gap: 1px;
+  font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1.1;
   overflow: hidden;
 }
-.plabel small { font-size: 8.5px; font-weight: 400; color: #a5b0bd; line-height: 1.25; }
+.plabel small { font-size: 9px; font-weight: 400; color: #a5b0bd; line-height: 1.15; }
 .plabel.active {
   color: var(--primary); font-weight: 800;
   border: 1.5px solid var(--primary); border-radius: 9px;
