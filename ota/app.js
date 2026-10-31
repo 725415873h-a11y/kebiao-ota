@@ -767,7 +767,6 @@
     $('remindon').checked = state.remindOn;
     $('remindlead').value = String(state.remindLead);
     $('icsallday').checked = state.icsAllday;
-    $('opendoc').textContent = window.KebiaoAndroid ? '① 一键在线更新（自动抓取）' : '① 打开腾讯文档';
     if (window.KebiaoAndroid) {
       var vinfo = (window.KebiaoAndroid.getVersion() || '1|1').split('|');
       $('otastatus').textContent = '当前 UI v' + vinfo[0] + ' · APK v' + vinfo[1];
@@ -1018,13 +1017,11 @@
     };
     $('selnone').onclick = function () { state.mine = {}; saveSettings(); renderAll(); };
     // ---------- 在线更新（书签脚本 / APK 一键） ----------
-    $('opendoc').onclick = function () {
-      if (window.KebiaoAndroid) {
-        toast('正在后台刷新课表…', 4000);
-        window.KebiaoAndroid.openDoc(state.docId);
-      } else {
-        window.open('https://docs.qq.com/sheet/' + state.docId + '?tab=000001', '_blank');
-      }
+    // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
+    $('opendoc2').onclick = function () {
+      var url = 'https://docs.qq.com/sheet/' + state.docId + '?tab=000001';
+      if (window.KebiaoAndroid && window.KebiaoAndroid.openBrowser) window.KebiaoAndroid.openBrowser(url);
+      else window.open(url, '_blank');
     };
     $('copybm').onclick = function () {
       var bm = buildBookmarklet();
