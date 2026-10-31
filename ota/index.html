@@ -70,11 +70,12 @@
     <!-- 设置视图 -->
     <section id="view-settings" class="view" hidden>
       <div class="card">
-        <h3>课表快照核对</h3>
-        <div id="docsnap" class="snap"></div>
-        <button id="weekshot" class="btn">生成本周课表快照图</button>
+        <h3>本周课表快照</h3>
+        <div id="snapcap" class="hint" style="margin:0 0 6px"></div>
+        <div id="snapwrap"><img id="shotimg" style="width:100%;border:1px solid var(--line)" alt="本周课表快照"></div>
+        <button id="weekshot" class="btn">重新生成快照图</button>
         <button id="opendoc2" class="btn">打开腾讯文档原文核对</button>
-        <div id="shotbox" hidden><img id="shotimg" style="width:100%;border:1px solid var(--line)" alt="本周课表快照"><p class="hint">长按图片可保存到相册。</p></div>
+        <p class="hint">长按图片可保存到相册，与腾讯文档原文核对数据是否一致。</p>
       </div>
       <div class="card">
         <h3>我的课程 <button id="selall" class="linkbtn">全选</button> <button id="selnone" class="linkbtn">清空</button></h3>

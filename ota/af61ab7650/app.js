@@ -703,27 +703,8 @@
 
   // ---------- 设置 ----------
   function renderSettings() {
-    // 顶部快照：本周课程概览 + 数据时间（便于与腾讯文档原文核对）
-    var snap = '';
-    if (state.data) {
-      var w = currentWeekObj();
-      var d0 = w.dates[0], d6 = w.dates[6];
-      snap += '<div class="snapline"><b>第' + w.week + '周</b>（' + (d0 ? d0.date : '') + ' ~ ' + (d6 ? d6.date : '') + '）</div>';
-      var seen = {};
-      var total = 0;
-      w.days.forEach(function (arr) { arr.forEach(function (c) { total++; seen[courseKey(c)] = true; }); });
-      snap += '<div class="snapline">本周共 ' + total + ' 门课 · ' + Object.keys(seen).length + ' 种</div>';
-      for (var d = 0; d < 7; d++) {
-        var names = [];
-        (w.days[d] || []).forEach(function (c) { if (names.indexOf(c.name) < 0) names.push(c.name); });
-        snap += '<div class="snapday"><span>' + DAY_NAMES[d] + '</span>' + (names.length ? esc(names.join('、')) : '—') + '</div>';
-      }
-      var ts = state.data.meta && (state.data.meta.fetchedAt || state.data.meta.generatedAt);
-      if (ts) snap += '<div class="snapline snapts">数据更新：' + ts.replace('T', ' ').slice(0, 16) + '</div>';
-    } else {
-      snap = '<div class="snapline">暂无数据</div>';
-    }
-    $('docsnap').innerHTML = snap;
+    // 顶部：自动生成本周课表快照图（图片而非文字，便于与腾讯文档原文核对）
+    updateSnapshot();
 
     // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
     $('opendoc2').onclick = function () {
@@ -731,16 +712,24 @@
       if (window.KebiaoAndroid && window.KebiaoAndroid.openBrowser) window.KebiaoAndroid.openBrowser(url);
       else window.open(url, '_blank');
     };
-    // 生成本周课表快照图（canvas 绘制，长按保存）
-    $('weekshot').onclick = function () {
-      var cv = drawWeekSnapshot();
-      if (!cv) { toast('暂无数据'); return; }
-      $('shotimg').src = cv.toDataURL('image/png');
-      $('shotbox').hidden = false;
-      $('shotbox').scrollIntoView({ behavior: 'smooth' });
-    };
+    // 重新生成快照图（切换周次后可刷新）
+    $('weekshot').onclick = function () { updateSnapshot(); };
 
-    // 课程清单（我的课程成员编辑）
+    // 生成快照图并显示在设置页（图片而非文字）
+  function updateSnapshot() {
+    var wrap = document.getElementById('snapwrap');
+    var cap = $('snapcap');
+    var cv = drawWeekSnapshot();
+    if (!cv) { if (wrap) wrap.hidden = true; if (cap) cap.textContent = '暂无数据'; return; }
+    $('shotimg').src = cv.toDataURL('image/png');
+    if (wrap) wrap.hidden = false;
+    if (cap) {
+      var ts = state.data && state.data.meta && (state.data.meta.fetchedAt || state.data.meta.generatedAt);
+      cap.textContent = '数据更新：' + (ts ? ts.replace('T', ' ').slice(0, 16) : '—') + '（可保存图片与腾讯文档原文核对）';
+    }
+  }
+
+  // 课程清单（我的课程成员编辑）
     var catalog = {};
     if (state.data) {
       state.data.weeks.forEach(function (w) {
