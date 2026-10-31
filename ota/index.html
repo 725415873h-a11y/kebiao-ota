@@ -83,6 +83,10 @@
         <div id="courselist"></div>
       </div>
       <div class="card">
+        <h3>操作日志（保留 7 天） <button id="logclear" class="linkbtn">清空</button></h3>
+        <div id="loglist" class="loglist"></div>
+      </div>
+      <div class="card">
         <h3>提醒</h3>
         <label class="row"><span>上课提醒</span><input type="checkbox" id="remindon"></label>
         <label class="row"><span>提前</span>
@@ -94,7 +98,7 @@
           </select>
         </label>
         <button id="testnotify" class="btn">测试通知</button>
-        <p class="hint">应用打开时会提前提醒；导出日历后系统日历也会提醒（更可靠）。</p>
+        <p class="hint">应用打开时会提前发系统通知提醒（首次使用请允许通知权限）；导出日历后系统日历也会提醒（更可靠）。</p>
       </div>
       <div class="card">
         <h3>导出日历</h3>
@@ -160,7 +164,6 @@
     <div class="mm-panel"></div>
   </div>
 
-  <div id="banner" hidden></div>
   <div id="bottomhint" role="status"></div>
 
   <!-- 快照全屏预览（双指缩放/拖动/双击切换/旋转） -->

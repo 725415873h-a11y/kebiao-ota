@@ -704,6 +704,28 @@
   }
 
   // ---------- 设置 ----------
+  function renderLogs() {
+    var box = $('loglist');
+    if (!box) return;
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem(LS + 'logs') || '[]'); } catch (e) { arr = []; }
+    if (!Array.isArray(arr)) arr = [];
+    arr = arr.slice().sort(function (a, b) { return b.t - a.t; });
+    if (!arr.length) { box.innerHTML = '<p class="hint" style="margin:0">暂无日志（刷新课表、截图等操作会记录在这里，保留 7 天）</p>'; return; }
+    var html = '', lastDay = '';
+    arr.forEach(function (x) {
+      var d = new Date(x.t);
+      var day = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+      if (day !== lastDay) { html += '<div class="logday">' + day + '</div>'; lastDay = day; }
+      var mark = x.r === 'ok' ? '<span class="lok">✓</span>'
+        : (x.r === 'fail' ? '<span class="lfail">✗</span>' : '<span class="ldot">•</span>');
+      html += '<div class="logrow"><span class="ltime">' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</span>' +
+        '<span class="lop">' + (LOG_OPS[x.op] || esc(x.op)) + '</span>' +
+        '<span class="ld">' + esc(x.d) + '</span>' + mark + '</div>';
+    });
+    box.innerHTML = html;
+  }
+
   function renderSettings() {
     // 顶部：显示最近一次腾讯文档真实截图（点击可全屏放大）
     var last = localStorage.getItem(LS + 'docsnap');
@@ -715,6 +737,12 @@
       $('shotimg').hidden = true;
       $('snapcap').textContent = '尚未截图，点下方「自动截图当周」获取（启动时也会自动刷新）';
     }
+    renderLogs();
+    $('logclear').onclick = function () {
+      localStorage.removeItem(LS + 'logs');
+      renderLogs();
+      bottomHint('日志已清空');
+    };
 
     // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
     $('opendoc2').onclick = function () {
@@ -726,6 +754,7 @@
     // 自动截图当周（隐形 WebView 加载腾讯文档原生页面，真实截图）
     $('snapauto').onclick = function () {
       var row = weekRowFor(state.week);
+      logOp('snapshot', '手动截图（第' + state.week + '周）');
       if (window.KebiaoAndroid) window.KebiaoAndroid.docSnapAuto(state.docId, String(row));
       else toast('自动截图需在 App 内使用（网页版请直接截取课表页或用系统截图）');
     };
@@ -910,23 +939,34 @@
   }
 
   // ---------- 提醒 ----------
-  function toast(msg, ms) {
-    var b = $('banner');
-    b.textContent = msg;
-    b.hidden = false;
-    clearTimeout(b._t);
-    b._t = setTimeout(function () { b.hidden = true; }, ms || 6000);
-  }
-
-  // 底部轻提示：小胶囊，不打扰视野（导入成功等轻量反馈用）
-  function bottomHint(msg, ms) {
+  // 底部深色小胶囊：全部提示统一走这里（不再用大橙条）
+  function showCapsule(msg, ms) {
     var el = $('bottomhint');
     if (!el) return;
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(el._t);
-    el._t = setTimeout(function () { el.classList.remove('show'); }, ms || 2200);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, Math.min(ms || 3000, 10000));
   }
+  function toast(msg, ms) { showCapsule(msg, ms || 4000); }
+  function bottomHint(msg, ms) { showCapsule(msg, ms || 2200); }
+
+  // ---------- 操作日志（保留 7 天） ----------
+  var LOG_OPS = { refresh: '课表刷新', snapshot: '课表快照', import: '数据导入', ota: '软件更新', remind: '上课提醒' };
+  function logOp(op, d, r) {
+    try {
+      var arr = [];
+      try { arr = JSON.parse(localStorage.getItem(LS + 'logs') || '[]'); } catch (e) { arr = []; }
+      if (!Array.isArray(arr)) arr = [];
+      var now = Date.now();
+      arr.push({ t: now, op: op, d: String(d || ''), r: String(r || '') });
+      arr = arr.filter(function (x) { return x.t >= now - 7 * 86400000; }); // 只留 7 天
+      if (arr.length > 400) arr = arr.slice(arr.length - 400);
+      localStorage.setItem(LS + 'logs', JSON.stringify(arr));
+      if (state.tab === 'settings') renderLogs();
+    } catch (e) { /* 存储异常忽略 */ }
+  }
+  window.__appLog = function (op, d, r) { logOp(op, d, r); }; // 原生侧日志入口
 
   function checkReminders() {
     if (!state.remindOn || !state.data) return;
@@ -941,10 +981,11 @@
       if (nowMin >= s - state.remindLead && nowMin <= s + 5) {
         state.notified[k] = true;
         var msg = it.c.name + ' ' + it.t.start + ' 上课' + (it.c.location ? ' @' + it.c.location : '');
-        toast('⏰ ' + msg, 15000);
+        toast('⏰ ' + msg, 8000);
         if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-        if (window.Notification && Notification.permission === 'granted') {
-          try { new Notification('上课提醒', { body: msg }); } catch (e) { /* noop */ }
+        // 系统通知（需通知权限；WebView 的 web Notification 不可用）
+        if (window.KebiaoAndroid && window.KebiaoAndroid.notify) {
+          try { window.KebiaoAndroid.notify('上课提醒', msg); logOp('remind', msg, 'ok'); } catch (e) { }
         }
       }
     });
@@ -1021,7 +1062,11 @@
     $('remindlead').onchange = function () { state.remindLead = +$('remindlead').value; saveSettings(); };
     $('icsallday').onchange = function () { state.icsAllday = $('icsallday').checked; saveSettings(); };
     $('testnotify').onclick = function () {
-      if (window.Notification && Notification.permission !== 'granted') {
+      if (window.KebiaoAndroid && window.KebiaoAndroid.notify) {
+        window.KebiaoAndroid.notify('上课提醒', '这是一条测试通知，说明通知权限正常');
+        logOp('remind', '测试通知已发送', 'ok');
+        toast('测试通知已发出，请在通知栏查看', 4000);
+      } else if (window.Notification && Notification.permission !== 'granted') {
         Notification.requestPermission().then(function (p) { toast(p === 'granted' ? '通知已授权' : '通知被拒绝，仅应用内提醒'); });
       } else {
         toast('✅ 通知通道正常', 3000);
@@ -1078,10 +1123,12 @@
       applyData(sched, 'snapshot');
       state.dataTs = Date.now();
       saveDataCache();
+      logOp('import', '导入成功（' + sched.weeks.length + ' 周）', 'ok');
       bottomHint('导入成功');
       $('importbox').value = '';
       return true;
     }).catch(function (e) {
+      logOp('import', '导入失败：' + e.message, 'fail');
       toast('解析失败：' + e.message, 8000);
       return false;
     });
@@ -1098,19 +1145,20 @@
   // APK 原生桥回传：失败闭环
   window.__refreshFail = function (msg) {
     if (pendingRefreshResolve) { var r = pendingRefreshResolve; pendingRefreshResolve = null; r(false); }
+    logOp('refresh', '刷新失败：' + (msg || '未知原因'), 'fail');
     if (msg) toast('刷新失败：' + msg, 6000);
   };
 
   // OTA 状态回调（App 原生）
   window.__otaStatus = function (type, msg) {
     var st = $('otastatus');
-    if (type === 'checking') { st.textContent = '正在检查更新…'; return; }
+    if (type === 'checking') { st.textContent = '正在检查更新…'; logOp('ota', '检查更新'); return; }
     if (type === 'downloading') { st.textContent = '正在下载更新（' + msg + '）…'; return; }
-    if (type === 'latest') { st.textContent = '当前已是最新（UI v' + msg + '）'; return; }
-    if (type === 'done') { toast('软件已更新到 v' + msg + '，即将重载'); st.textContent = '已更新到 v' + msg; return; }
-    if (type === 'apk-perm') { toast('请先在系统设置中允许本应用安装未知应用，然后再次检查更新', 8000); st.textContent = '需要安装权限'; return; }
-    if (type === 'apk-confirm') { toast('已下载新版 APK，请在系统弹窗中确认安装', 8000); st.textContent = '已拉起安装'; return; }
-    if (type === 'fail') { toast('更新失败：' + msg, 8000); st.textContent = '更新失败：' + msg; return; }
+    if (type === 'latest') { st.textContent = '当前已是最新（UI v' + msg + '）'; logOp('ota', '已是最新 v' + msg, 'ok'); return; }
+    if (type === 'done') { toast('软件已更新到 v' + msg + '，即将重载'); st.textContent = '已更新到 v' + msg; logOp('ota', 'UI 已更新 v' + msg, 'ok'); return; }
+    if (type === 'apk-perm') { toast('请先在系统设置中允许本应用安装未知应用，然后再次检查更新', 8000); st.textContent = '需要安装权限'; logOp('ota', '需要安装权限', 'fail'); return; }
+    if (type === 'apk-confirm') { toast('已下载新版 APK，请在系统弹窗中确认安装', 8000); st.textContent = '已拉起安装'; logOp('ota', '已拉起 APK 安装', 'ok'); return; }
+    if (type === 'fail') { toast('更新失败：' + msg, 8000); st.textContent = '更新失败：' + msg; logOp('ota', '更新失败：' + msg, 'fail'); return; }
   };
 
   // APK 原生截图回传：显示在快照卡并存档（原图在应用私有目录，点图可全屏放大）
@@ -1123,6 +1171,7 @@
     $('shotimg').hidden = false;
     $('shotimg').src = dataUrl;
     $('snapcap').textContent = '已更新本周快照（点击图片可全屏放大查看）';
+    logOp('snapshot', '快照已更新', 'ok');
     toast('本周快照已更新', 3000);
   };
 
@@ -1334,13 +1383,9 @@
     if (!src) src = $('shotimg').src || '';
     if (!src) { toast('还没有快照，先点「自动截图当周」'); return; }
     var img = $('snapview-img');
-    img.onload = function () {
-      // 横版截图在竖屏上默认转 90°铺满（屏幕仍是竖向，转手机或点 ⟳ 换向）
-      setSnapRot(img.naturalWidth > img.naturalHeight ? 90 : 0);
-    };
     img.src = src;
     $('snapview').hidden = false;
-    setSnapRot(0);
+    setSnapRot(0); // 默认原始竖向显示，⟳ 可切换横向铺满
   }
   function initSnapPreview() {
     var ov = $('snapview');
@@ -1436,6 +1481,7 @@
     sessionStorage.setItem('bootSnapDone', '1');
     setTimeout(function () {
       var row = weekRowFor(state.week);
+      logOp('snapshot', '启动自动截图（第' + state.week + '周）');
       window.KebiaoAndroid.docSnapAuto(state.docId, String(row));
     }, 2500);
   }
