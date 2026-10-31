@@ -1096,6 +1096,16 @@
     if (type === 'fail') { toast('更新失败：' + msg, 8000); st.textContent = '更新失败：' + msg; return; }
   };
 
+  // APK 原生截图回传：显示在快照卡并存档
+  window.__docSnapSaved = function (dataUrl) {
+    if (!dataUrl) return;
+    try { localStorage.setItem(LS + 'docsnap', dataUrl); } catch (e) { /* 忽略超限 */ }
+    $('shotimg').hidden = false;
+    $('shotimg').src = dataUrl;
+    $('snapcap').textContent = '已截图并存入相册 Pictures/天大福州';
+    toast('文档截图完成', 3000);
+  };
+
   // ---------- 书签脚本 ----------
   function bookmarkletBody() {
     // 在 docs.qq.com 页面内执行：同源 JSONP/fetch 拉全部分块，精简后复制到剪贴板
