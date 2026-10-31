@@ -929,6 +929,22 @@
   function exportIcs() {
     var ics = buildIcs();
     if (!ics) { toast('暂无数据'); return; }
+    // App 内：.ics 落盘（私有缓存）→ 原生拉起系统日历导入
+    if (window.KebiaoAndroid && window.KebiaoAndroid.saveIcs) {
+      var r = window.KebiaoAndroid.saveIcs(ics);
+      if (r === 'ok') {
+        logOp('cal', '导出日历并拉起系统日历导入', 'ok');
+        toast('已生成课表 .ics，请在日历应用中确认导入', 5000);
+      } else if (r === 'noapp') {
+        logOp('cal', '导出日历失败：未找到日历应用', 'fail');
+        toast('未找到日历应用，无法拉起导入', 5000);
+      } else {
+        logOp('cal', '导出日历失败', 'fail');
+        toast('导出失败，请重试', 4000);
+      }
+      return;
+    }
+    // 网页版：浏览器下载
     var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -952,7 +968,7 @@
   function bottomHint(msg, ms) { showCapsule(msg, ms || 2200); }
 
   // ---------- 操作日志（保留 7 天） ----------
-  var LOG_OPS = { refresh: '课表刷新', snapshot: '课表快照', import: '数据导入', ota: '软件更新', remind: '上课提醒' };
+  var LOG_OPS = { refresh: '课表刷新', snapshot: '课表快照', import: '数据导入', ota: '软件更新', remind: '上课提醒', cal: '导出日历' };
   function logOp(op, d, r) {
     try {
       var arr = [];
