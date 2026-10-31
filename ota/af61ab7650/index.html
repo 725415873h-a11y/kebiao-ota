@@ -70,12 +70,12 @@
     <!-- 设置视图 -->
     <section id="view-settings" class="view" hidden>
       <div class="card">
-        <h3>本周课表快照</h3>
+        <h3>腾讯文档快照</h3>
         <div id="snapcap" class="hint" style="margin:0 0 6px"></div>
-        <div id="snapwrap"><img id="shotimg" style="width:100%;border:1px solid var(--line)" alt="本周课表快照"></div>
-        <button id="weekshot" class="btn">重新生成快照图</button>
-        <button id="opendoc2" class="btn">打开腾讯文档原文核对</button>
-        <p class="hint">长按图片可保存到相册，与腾讯文档原文核对数据是否一致。</p>
+        <img id="shotimg" style="width:100%;border:1px solid var(--line)" alt="腾讯文档快照">
+        <button id="snapauto" class="btn primary">自动截图当周（后台）</button>
+        <button id="opendocsnap" class="btn">打开文档原文（手动截图）</button>
+        <p class="hint">自动截图：隐形加载腾讯文档原生页面（Cookie 定位所选周）并整页截图，完成后存相册并回显；手动模式：打开原文后滚动到目标位置，点底部「📷 截图保存」。两张截图路径不同，任选其一。</p>
       </div>
       <div class="card">
         <h3>我的课程 <button id="selall" class="linkbtn">全选</button> <button id="selnone" class="linkbtn">清空</button></h3>

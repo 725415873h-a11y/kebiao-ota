@@ -703,8 +703,16 @@
 
   // ---------- 设置 ----------
   function renderSettings() {
-    // 顶部：自动生成本周课表快照图（图片而非文字，便于与腾讯文档原文核对）
-    updateSnapshot();
+    // 顶部：显示最近一次腾讯文档真实截图
+    var last = localStorage.getItem(LS + 'docsnap');
+    if (last) {
+      $('shotimg').hidden = false;
+      $('shotimg').src = last;
+      $('snapcap').textContent = '最近一次文档截图（已存入相册 Pictures/天大福州）';
+    } else {
+      $('shotimg').hidden = true;
+      $('snapcap').textContent = '尚未截图，点下方「自动截图当周」获取';
+    }
 
     // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
     $('opendoc2').onclick = function () {
@@ -712,24 +720,20 @@
       if (window.KebiaoAndroid && window.KebiaoAndroid.openBrowser) window.KebiaoAndroid.openBrowser(url);
       else window.open(url, '_blank');
     };
-    // 重新生成快照图（切换周次后可刷新）
-    $('weekshot').onclick = function () { updateSnapshot(); };
 
-    // 生成快照图并显示在设置页（图片而非文字）
-  function updateSnapshot() {
-    var wrap = document.getElementById('snapwrap');
-    var cap = $('snapcap');
-    var cv = drawWeekSnapshot();
-    if (!cv) { if (wrap) wrap.hidden = true; if (cap) cap.textContent = '暂无数据'; return; }
-    $('shotimg').src = cv.toDataURL('image/png');
-    if (wrap) wrap.hidden = false;
-    if (cap) {
-      var ts = state.data && state.data.meta && (state.data.meta.fetchedAt || state.data.meta.generatedAt);
-      cap.textContent = '数据更新：' + (ts ? ts.replace('T', ' ').slice(0, 16) : '—') + '（可保存图片与腾讯文档原文核对）';
-    }
-  }
+    // 自动截图当周（隐形 WebView 加载腾讯文档原生页面，真实截图）
+    $('snapauto').onclick = function () {
+      var row = weekRowFor(state.week);
+      if (window.KebiaoAndroid) window.KebiaoAndroid.docSnapAuto(state.docId, String(row));
+      else toast('自动截图需在 App 内使用（网页版请直接截取课表页或用系统截图）');
+    };
 
-  // 课程清单（我的课程成员编辑）
+    // 手动模式：打开文档原文（主 WebView + 浮动截图按钮）
+    $('opendocsnap').onclick = function () {
+      var row = weekRowFor(state.week);
+      if (window.KebiaoAndroid) window.KebiaoAndroid.openDocSnap(state.docId, String(row));
+      else toast('手动截图需在 App 内使用');
+    };
     var catalog = {};
     if (state.data) {
       state.data.weeks.forEach(function (w) {
@@ -770,6 +774,13 @@
     } else {
       $('otastatus').textContent = '浏览器环境：更新页面文件后刷新即可，无需此功能';
     }
+  }
+
+  // 周次 → 腾讯文档内的起始行号（用于打开原文时自动定位）
+  function weekRowFor(weekNo) {
+    if (!state.data || !state.data.meta || !state.data.meta.weekRows) return 0;
+    var m = state.data.meta.weekRows.find(function (x) { return x.week === weekNo; });
+    return m ? m.row : 0;
   }
 
   function renderDataStatus() {

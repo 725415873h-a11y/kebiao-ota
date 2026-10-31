@@ -235,7 +235,7 @@
         const d = dateOf(w.weekNo, i);
         dates.push(d ? { date: iso(d), month: d.getMonth() + 1, day: d.getDate() } : null);
       }
-      weeks.push({ week: w.weekNo, dates, days, notes: Array.from(new Set(notes)) });
+      weeks.push({ week: w.weekNo, row: w.start, dates, days, notes: Array.from(new Set(notes)) });
     }
     weeks.sort((a, b) => a.week - b.week);
     return {
@@ -243,6 +243,7 @@
       meta: {
         firstWeekMonday: firstMonday ? iso(firstMonday) : null,
         maxWeek: weeks.length ? weeks[weeks.length - 1].week : null,
+        weekRows: weeks.map(function (w) { return { week: w.week, row: w.row }; }),
         generatedAt: new Date().toISOString(),
       },
     };
