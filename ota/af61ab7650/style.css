@@ -348,3 +348,37 @@ body { background: var(--card); }
   #main { max-width: 980px; margin: 0 auto; width: 100%; }
   .course { font-size: 12px; }
 }
+
+/* 快照全屏预览（双指缩放/拖动/双击切换） */
+#snapview {
+  position: fixed;
+  left: 0; right: 0; top: 0; bottom: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.93);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  overflow: hidden;
+}
+#snapview[hidden] { display: none; }
+#snapview-img {
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+}
+#snapview-close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 14px;
+  z-index: 2;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+}
+#shotimg { cursor: zoom-in; }

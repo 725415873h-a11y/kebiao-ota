@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="天大福州">
 <title>天大福州</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=20261030">
+<link rel="stylesheet" href="style.css?v=20261031">
 </head>
 <body>
 <div id="app">
@@ -75,7 +75,7 @@
         <img id="shotimg" style="width:100%;border:1px solid var(--line)" alt="腾讯文档快照">
         <button id="snapauto" class="btn primary">自动截图当周（后台）</button>
         <button id="opendoc2" class="btn">打开腾讯文档原文核对</button>
-        <p class="hint">自动截图：隐形加载腾讯文档原生页面（Cookie 定位所选周）并整页截图，完成后存相册并回显。</p>
+        <p class="hint">自动截图：隐形加载腾讯文档原生页面（Cookie 定位所选周）并整页截图，完成后在应用内回显（点击图片可全屏放大）；每次启动也会自动刷新当周快照。</p>
       </div>
       <div class="card">
         <h3>我的课程 <button id="selall" class="linkbtn">全选</button> <button id="selnone" class="linkbtn">清空</button></h3>
@@ -161,9 +161,15 @@
   </div>
 
   <div id="banner" hidden></div>
+
+  <!-- 快照全屏预览（双指缩放/拖动/双击切换） -->
+  <div id="snapview" hidden>
+    <button id="snapview-close" aria-label="关闭">✕</button>
+    <img id="snapview-img" alt="课表快照">
+  </div>
 </div>
 <script src="data.js"></script>
-<script src="schedule-core.js?v=20261030"></script>
-<script src="app.js?v=20261030"></script>
+<script src="schedule-core.js?v=20261031"></script>
+<script src="app.js?v=20261031"></script>
 </body>
 </html>

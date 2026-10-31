@@ -705,15 +705,15 @@
 
   // ---------- 设置 ----------
   function renderSettings() {
-    // 顶部：显示最近一次腾讯文档真实截图
+    // 顶部：显示最近一次腾讯文档真实截图（点击可全屏放大）
     var last = localStorage.getItem(LS + 'docsnap');
     if (last) {
       $('shotimg').hidden = false;
       $('shotimg').src = last;
-      $('snapcap').textContent = '最近一次文档截图（已存入相册 Pictures/天大福州）';
+      $('snapcap').textContent = '最近一次文档快照（点击图片可全屏放大查看）';
     } else {
       $('shotimg').hidden = true;
-      $('snapcap').textContent = '尚未截图，点下方「自动截图当周」获取';
+      $('snapcap').textContent = '尚未截图，点下方「自动截图当周」获取（启动时也会自动刷新）';
     }
 
     // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
@@ -1103,14 +1103,17 @@
     if (type === 'fail') { toast('更新失败：' + msg, 8000); st.textContent = '更新失败：' + msg; return; }
   };
 
-  // APK 原生截图回传：显示在快照卡并存档
+  // APK 原生截图回传：显示在快照卡并存档（原图在应用私有目录，点图可全屏放大）
   window.__docSnapSaved = function (dataUrl) {
     if (!dataUrl) return;
-    try { localStorage.setItem(LS + 'docsnap', dataUrl); } catch (e) { /* 忽略超限 */ }
+    try {
+      localStorage.setItem(LS + 'docsnap', dataUrl);
+      localStorage.setItem(LS + 'docsnapTs', String(Date.now()));
+    } catch (e) { /* 忽略超限 */ }
     $('shotimg').hidden = false;
     $('shotimg').src = dataUrl;
-    $('snapcap').textContent = '已截图并存入相册 Pictures/天大福州';
-    toast('文档截图完成', 3000);
+    $('snapcap').textContent = '已更新本周快照（点击图片可全屏放大查看）';
+    toast('本周快照已更新', 3000);
   };
 
   // ---------- 书签脚本 ----------
@@ -1301,16 +1304,106 @@
     });
   }
 
+  // ---------- 快照全屏预览（双指缩放/拖动/双击切换/✕关闭） ----------
+  var snapView = { scale: 1, tx: 0, ty: 0, p1: null, p2: null, dist: 0, lastTap: 0 };
+  function applySnapView() {
+    $('snapview-img').style.transform = 'translate(' + snapView.tx + 'px,' + snapView.ty + 'px) scale(' + snapView.scale + ')';
+  }
+  function resetSnapView() { snapView.scale = 1; snapView.tx = 0; snapView.ty = 0; applySnapView(); }
+  function openSnapPreview() {
+    var src = '';
+    if (window.KebiaoAndroid && window.KebiaoAndroid.snapFileUrl) {
+      try { src = window.KebiaoAndroid.snapFileUrl() || ''; } catch (e) { /* 网页版无桥 */ }
+    }
+    if (!src) src = $('shotimg').src || '';
+    if (!src) { toast('还没有快照，先点「自动截图当周」'); return; }
+    $('snapview-img').src = src;
+    $('snapview').hidden = false;
+    resetSnapView();
+  }
+  function initSnapPreview() {
+    var ov = $('snapview');
+    if (!ov) return;
+    function tdist(a, b) { var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY; return Math.sqrt(dx * dx + dy * dy); }
+    ov.addEventListener('touchstart', function (e) {
+      // ✕ 按钮放行：preventDefault 会吞掉合成 click，导致关不掉
+      if (e.target && e.target.id === 'snapview-close') return;
+      if (e.touches.length === 1) {
+        snapView.p1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length >= 2) {
+        snapView.p1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        snapView.p2 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        snapView.dist = tdist(snapView.p1, snapView.p2);
+      }
+      e.preventDefault();
+    }, { passive: false });
+    ov.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+      if (e.touches.length === 1 && snapView.p1) {
+        var nx = e.touches[0].clientX, ny = e.touches[0].clientY;
+        snapView.tx += nx - snapView.p1.x;
+        snapView.ty += ny - snapView.p1.y;
+        snapView.p1 = { x: nx, y: ny };
+        applySnapView();
+      } else if (e.touches.length >= 2 && snapView.p2) {
+        var a = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        var b = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        var d = tdist(a, b);
+        if (snapView.dist > 0) {
+          var ns = Math.min(8, Math.max(1, snapView.scale * d / snapView.dist));
+          var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+          var k = ns / snapView.scale;
+          snapView.tx = cx - (cx - snapView.tx) * k;
+          snapView.ty = cy - (cy - snapView.ty) * k;
+          snapView.scale = ns;
+          applySnapView();
+        }
+        snapView.dist = d;
+        snapView.p1 = a; snapView.p2 = b;
+      }
+    }, { passive: false });
+    ov.addEventListener('touchend', function (e) {
+      if (e.touches.length === 0) {
+        var now = Date.now();
+        if (now - snapView.lastTap < 300) {
+          if (snapView.scale > 1) resetSnapView();
+          else { snapView.scale = 2.5; snapView.tx = 0; snapView.ty = 0; applySnapView(); }
+          snapView.lastTap = 0;
+        } else snapView.lastTap = now;
+        snapView.p1 = snapView.p2 = null; snapView.dist = 0;
+        if (snapView.scale <= 1.01) resetSnapView();
+      } else if (e.touches.length === 1) {
+        snapView.p2 = null; snapView.dist = 0;
+        snapView.p1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    });
+    $('snapview-close').addEventListener('click', function () {
+      ov.hidden = true;
+      $('snapview-img').src = '';
+      resetSnapView();
+    });
+    $('shotimg').addEventListener('click', openSnapPreview);
+  }
+
   // ---------- 启动 ----------
   window.__buildIcs = buildIcs; // 调试/测试钩子
   setupPullToRefresh();
   setupWeekSwipe();
   loadSettings();
   bind();
+  initSnapPreview();
   if (state.data) { renderAll(); }
   fetchSchedule(false).catch(function (e) {
     if (!state.data) toast('数据加载失败：' + e.message, 10000);
   });
+  // 启动自动刷新当周快照（仅 App 内，每次启动一次；原生侧对运行中的截图去重）
+  if (window.KebiaoAndroid && window.KebiaoAndroid.docSnapAuto && !sessionStorage.getItem('bootSnapDone')) {
+    sessionStorage.setItem('bootSnapDone', '1');
+    setTimeout(function () {
+      var row = weekRowFor(state.week);
+      window.KebiaoAndroid.docSnapAuto(state.docId, String(row));
+    }, 2500);
+  }
   setInterval(function () {
     if (state.tab === 'today') renderToday();
     if (state.tab === 'timetable') renderTimetable(); // 刷新当前节次高亮
