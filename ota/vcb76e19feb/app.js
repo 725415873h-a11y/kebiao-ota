@@ -378,14 +378,16 @@
         cards.forEach(function (el) {
           var key = el.getAttribute('data-k');
           var cl = clusterOf[key];
-          if (cl.mineLock) return; // 我的课程锁定，不轮播
+          if (!cl || cl.mineLock) return; // 我的课程锁定不轮播；簇结构已重建时跳过
           var cur = cycleState[key] || 0;
           var next = (cur + 1) % cl.members.length;
           cycleState[key] = next;
           var c = groups[cl.members[next].key].c;
+          var nm = el.querySelector('.cname'), rm = el.querySelector('.croom');
+          if (!nm || !rm) return; // 卡片可能已被重渲染移除
           el.style.backgroundColor = courseColor(c);
-          el.querySelector('.cname').innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
-          el.querySelector('.croom').textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
+          nm.innerHTML = esc(c.name) + (c.className ? '<br>@' + esc(c.className) : '');
+          rm.textContent = c.location ? c.location.replace(/[（）/]/g, '') : '';
         });
       }, 2000);
     }
