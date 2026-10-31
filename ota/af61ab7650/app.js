@@ -918,6 +918,16 @@
     b._t = setTimeout(function () { b.hidden = true; }, ms || 6000);
   }
 
+  // 底部轻提示：小胶囊，不打扰视野（导入成功等轻量反馈用）
+  function bottomHint(msg, ms) {
+    var el = $('bottomhint');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('show'); }, ms || 2200);
+  }
+
   function checkReminders() {
     if (!state.remindOn || !state.data) return;
     var tc = todayCourses();
@@ -1068,7 +1078,7 @@
       applyData(sched, 'snapshot');
       state.dataTs = Date.now();
       saveDataCache();
-      toast('导入成功：' + sched.weeks.length + ' 个周块', 2500);
+      bottomHint('导入成功');
       $('importbox').value = '';
       return true;
     }).catch(function (e) {

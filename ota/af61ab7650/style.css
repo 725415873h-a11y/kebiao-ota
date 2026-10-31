@@ -182,7 +182,7 @@ body { background: var(--card); }
 #gridbody {
   flex: 1; min-height: 0; display: grid;
   grid-template-columns: 30px repeat(7, 1fr);
-  grid-template-rows: repeat(12, minmax(52px, 1fr));
+  grid-template-rows: repeat(12, minmax(44px, 1fr));
   align-content: stretch;
 }
 #gridbody.slide-next { animation: kbSlideNext .3s cubic-bezier(.22, .61, .36, 1) both; }
@@ -402,3 +402,16 @@ body { background: var(--card); }
   max-width: none;
   max-height: none;
 }
+
+/* 底部轻提示（导入成功等） */
+#bottomhint {
+  position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content;
+  bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 70;
+  background: rgba(20, 20, 20, .82); color: #fff;
+  border-radius: 999px; padding: 7px 16px;
+  font-size: 12px; font-weight: 600;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+  transform: translateY(6px);
+}
+#bottomhint.show { opacity: 1; transform: translateY(0); }
