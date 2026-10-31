@@ -174,7 +174,7 @@
         const dv = at(dateRow, c).trim();
         if (/^\d+$/.test(dv)) { mondayDay = parseInt(dv, 10); break; }
       }
-      rawWeeks.push({ weekNo, dateRow, end, mondayDay });
+      rawWeeks.push({ weekNo, start, dateRow, end, mondayDay });
     }
     if (!rawWeeks.length) throw new Error('未找到任何周次');
 

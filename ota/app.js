@@ -770,11 +770,23 @@
     }
   }
 
-  // 周次 → 腾讯文档内的起始行号（用于打开原文时自动定位）
+  // 周次 → 腾讯文档内的起始行号（用于自动截图定位）。
+  // 旧版抓取数据缺行号（schedule-core 曾漏存 start）：依次回退 weeks[].row → 内嵌快照行号表（同一文档行号一致）
   function weekRowFor(weekNo) {
-    if (!state.data || !state.data.meta || !state.data.meta.weekRows) return 0;
-    var m = state.data.meta.weekRows.find(function (x) { return x.week === weekNo; });
-    return m ? m.row : 0;
+    var wn = parseInt(weekNo, 10);
+    if (state.data && state.data.meta && state.data.meta.weekRows) {
+      var m = state.data.meta.weekRows.find(function (x) { return x.week === wn; });
+      if (m && typeof m.row === 'number') return m.row;
+    }
+    if (state.data && state.data.weeks) {
+      var w = state.data.weeks.find(function (x) { return x.week === wn; });
+      if (w && typeof w.row === 'number') return w.row;
+    }
+    if (typeof EMBEDDED_SCHEDULE !== 'undefined' && EMBEDDED_SCHEDULE.meta && EMBEDDED_SCHEDULE.meta.weekRows) {
+      m = EMBEDDED_SCHEDULE.meta.weekRows.find(function (x) { return x.week === wn; });
+      if (m && typeof m.row === 'number') return m.row;
+    }
+    return 0;
   }
 
   function renderDataStatus() {
