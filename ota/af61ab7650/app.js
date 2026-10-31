@@ -26,6 +26,7 @@
     remindOn: false,
     remindLead: 15,
     icsAllday: true,
+    icsMine: false,
     notified: {},        // 提醒去重
     otaUrl: OTA_URL      // 软件更新源（内置）
   };
@@ -883,12 +884,13 @@
 
   function buildIcs() {
     if (!state.data) return null;
-    var lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//grade-schedule//CN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:' + icsEscape('年级课表'), 'X-WR-TIMEZONE:Asia/Shanghai'];
+    var lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//grade-schedule//CN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:' + icsEscape('我的课表'), 'X-WR-TIMEZONE:Asia/Shanghai'];
     var n = 0;
     state.data.weeks.forEach(function (w) {
       for (var d = 0; d < 7; d++) {
         (w.days[d] || []).forEach(function (c) {
-          if (!isVisible(c)) return;
+          // 导出固定为「我的课程」勾选的课，不随当前查看模式变化（年级全量导出会全是冲突）
+          if (!state.mine[courseKey(c)]) return;
           var dt = w.dates[d] && w.dates[d].date;
           if (!dt) return;
           var t = courseTimes(c);
@@ -897,8 +899,8 @@
             lines.push('BEGIN:VEVENT',
               'UID:gs-' + w.week + '-' + d + '-' + n + '@grade-schedule',
               'DTSTAMP:' + stampNow(),
-              'DTSTART:' + toUtcLine(dt, t.start),
-              'DTEND:' + toUtcLine(dt, t.end),
+              'DTSTART;TZID=Asia/Shanghai:' + icsLocal(dt, t.start),
+              'DTEND;TZID=Asia/Shanghai:' + icsLocal(dt, t.end),
               'SUMMARY:' + icsEscape(c.name + (c.className ? ' @' + c.className : '')),
               c.location ? 'LOCATION:' + icsEscape(c.location) : 'LOCATION:',
               desc ? 'DESCRIPTION:' + desc : 'DESCRIPTION:',
@@ -925,9 +927,21 @@
     return lines.join('\r\n');
   }
 
+  /** 本地时间 ICS 片段（配合 TZID=Asia/Shanghai）：日期精确对应每一周，不做 UTC 换算 */
+  function icsLocal(dateStr, hm) {
+    var d = dateStr.split('-');
+    var t = (hm || '00:00').split(':');
+    return d[0] + pad2(d[1]) + pad2(d[2]) + 'T' + pad2(t[0]) + pad2(t[1]) + '00';
+  }
+
   function exportIcs() {
     var ics = buildIcs();
     if (!ics) { toast('暂无数据'); return; }
+    // 导出固定为「我的课程」：未勾选任何课程时明确提示
+    if (!ics.includes('BEGIN:VEVENT')) {
+      toast('请先在「我的课程」里勾选要导出到日历的课程', 5000);
+      return;
+    }
     // App 内：.ics 落盘（私有缓存）→ 原生拉起系统日历导入
     if (window.KebiaoAndroid && window.KebiaoAndroid.saveIcs) {
       var r = window.KebiaoAndroid.saveIcs(ics);
