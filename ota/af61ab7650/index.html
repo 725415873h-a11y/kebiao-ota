@@ -106,17 +106,7 @@
         <button id="exportics" class="btn primary">导出 .ics 到系统日历</button>
         <p class="hint">点击后自动生成 .ics 并拉起系统日历确认导入，导入的事件自带提醒。</p>
       </div>
-      <div class="card">
-        <h3>在线更新（书签脚本）</h3>
-        <p class="hint" style="margin:0 0 8px">手机可直接在线更新，三步：<br>
-          ① 点下方按钮打开腾讯文档页面（页面加载完再进行下一步）；<br>
-          ② 在该页面运行「书签脚本」：最简单的方法是先把脚本复制到剪贴板，然后在浏览器地址栏手动输入 <b>javascript:</b> 并粘贴后续内容后回车（部分浏览器需先收藏任一页面再编辑其网址为脚本）；<br>
-          ③ 脚本运行后数据自动复制，回到本 App 粘贴到下面并点「解析导入」。</p>
-        <button id="opendoc" class="btn">① 打开腾讯文档</button>
-        <button id="copybm" class="btn">② 复制书签脚本</button>
-        <textarea id="importbox" class="textinput" style="width:100%;height:70px;margin-top:8px" placeholder="③ 粘贴书签脚本复制的内容"></textarea>
-        <button id="importbtn" class="btn primary">解析并导入</button>
-      </div>
+
       <div class="card">
         <h3>软件更新</h3>
         <div id="otastatus" class="hint" style="margin:0 0 8px"></div>
@@ -126,7 +116,7 @@
       <div class="card">
         <h3>数据</h3>
         <div id="datastatus" class="hint"></div>
-        <p class="hint">课表数据在线更新：App 内下拉刷新或「一键在线更新」自动抓取；网页版用上方书签脚本导入。</p>
+        <p class="hint">课表数据在线更新：App 内下拉刷新即可自动抓取最新课表。</p>
       </div>
     </section>
   </main>

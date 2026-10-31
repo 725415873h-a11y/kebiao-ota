@@ -118,8 +118,7 @@
   }
 
   // ---------- 数据加载 ----------
-  // 来源：内嵌快照（data.js）/ localStorage 缓存；在线更新仅两条通道：
-  // App 内原生抓取（openDoc）与网页版书签脚本导入，不使用局域网
+  // 来源：内嵌快照（data.js）/ localStorage 缓存；在线更新走 App 内原生抓取（openDoc）
   var dataSource = 'none'; // snapshot | cache
   var pendingRefreshResolve = null; // APK 后台抓取期间挂起的下拉刷新回调
   var slideDir = 0; // 周切换动画方向：+1 下一周（右入），-1 上一周（左入）
@@ -144,7 +143,7 @@
     }
     // 网页版：使用内嵌快照/缓存
     renderAll();
-    if (force) toast('网页版请用「在线更新（书签脚本）」导入最新数据', 6000);
+    if (force) toast('网页版数据为内嵌快照，最新课表请在 App 内下拉刷新', 6000);
     return Promise.resolve();
   }
 
@@ -1094,28 +1093,11 @@
       saveSettings(); renderAll();
     };
     $('selnone').onclick = function () { state.mine = {}; saveSettings(); renderAll(); };
-    // ---------- 在线更新（书签脚本 / APK 一键） ----------
     // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
     $('opendoc2').onclick = function () {
       var url = 'https://docs.qq.com/sheet/' + state.docId + '?tab=000001';
       if (window.KebiaoAndroid && window.KebiaoAndroid.openBrowser) window.KebiaoAndroid.openBrowser(url);
       else window.open(url, '_blank');
-    };
-    $('copybm').onclick = function () {
-      var bm = buildBookmarklet();
-      copyText(bm).then(function (ok) {
-        toast(ok ? '书签脚本已复制，去腾讯文档页面执行' : '复制失败，请手动复制文本框内容', 6000);
-        if (!ok) {
-          var ta = $('importbox');
-          ta.value = bm;
-          ta.focus(); ta.select();
-        }
-      });
-    };
-    $('importbtn').onclick = function () {
-      var raw = $('importbox').value.trim();
-      if (!raw) { toast('请先粘贴书签脚本复制的内容'); return; }
-      importPayloadText(raw);
     };
     // ---------- 软件在线更新（OTA，内置更新源） ----------
     $('otacheck').onclick = function () {
@@ -1141,7 +1123,6 @@
       saveDataCache();
       logOp('import', '导入成功（' + sched.weeks.length + ' 周）', 'ok');
       bottomHint('导入成功');
-      $('importbox').value = '';
       return true;
     }).catch(function (e) {
       logOp('import', '导入失败：' + e.message, 'fail');
@@ -1190,40 +1171,6 @@
     logOp('snapshot', '快照已更新', 'ok');
     toast('本周快照已更新', 3000);
   };
-
-  // ---------- 书签脚本 ----------
-  function bookmarkletBody() {
-    // 在 docs.qq.com 页面内执行：同源 JSONP/fetch 拉全部分块，精简后复制到剪贴板
-    return '(async()=>{try{' +
-      'var m=location.pathname.match(/sheet\\/([A-Za-z0-9]+)/);if(!m){alert("请先打开腾讯文档表格页");return;}' +
-      'var ID=m[1],TAB=(location.search.match(/tab=([0-9a-fA-F]+)/)||[0,"000001"])[1];' +
-      'var cb="gsbk"+Date.now();' +
-      'var jsonp=function(u){return new Promise(function(res,rej){window[cb]=function(d){res(d);delete window[cb];};var s=document.createElement("script");s.src=u+"&callback="+cb;s.onerror=function(){rej(new Error("加载失败"))};document.head.appendChild(s);});};' +
-      'alert("① 正在拉取数据，请稍候…");' +
-      'var od=await jsonp("/dop-api/opendoc?tab="+TAB+"&u=&noEscape=1&enableSmartsheetSplit=1&startrow=0&endrow=60&needSheetState=1&sliceStates=1&block_end_col=63&block_end_row=255&block_start_col=0&block_start_row=0&id="+ID+"&normal=1&outformat=1&wb=1&nowb=0&xsrf=");' +
-      'var cv=od.clientVars.collab_client_vars;var maxRow=cv.maxRow,padId=cv.globalPadId,rev=cv.rev;' +
-      'var blocks=cv.initialAttributedText.text.map(function(t){return{max_row:t.max_row,max_col:t.max_col,b:t.block_datas.map(function(x){return x.related_sheet;})};});' +
-      'var covered=255;' +
-      'while(covered<maxRow){var start=covered+1,end=Math.min(covered+256,maxRow+1);' +
-      'var r=await fetch("/dop-api/get/sheet?padId="+encodeURIComponent(padId)+"&subId="+TAB+"&startrow="+start+"&xsrf=&outformat=1&normal=1&preview_token=&nowb=1&endrow="+end+"&needSheetState=2&sliceStates=1&block_end_col=63&block_end_row="+end+"&block_start_col=0&block_start_row="+start+"&rev="+rev,{credentials:"include"});' +
-      'var j=await r.json();var iat=(j.data&&j.data.initialAttributedText)||j.initialAttributedText;' +
-      'if(iat)blocks=blocks.concat(iat.text.map(function(t){return{max_row:t.max_row,max_col:t.max_col,b:t.block_datas.map(function(x){return x.related_sheet;})};}));' +
-      'covered=end-1;}' +
-      'var payload=JSON.stringify({v:1,doc:ID,blocks:blocks});' +
-      'var done=function(){alert("② 已复制 "+payload.length+" 字符。请回到课表App粘贴导入。");};' +
-      'try{await navigator.clipboard.writeText(payload);done();}' +
-      'catch(e){var ta=document.createElement("textarea");ta.value=payload;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();done();}' +
-      '}catch(e){alert("失败："+e.message)}})();';
-  }
-  function buildBookmarklet() {
-    return 'javascript:' + encodeURIComponent(bookmarkletBody());
-  }
-  function copyText(t) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(t).then(function () { return true; }).catch(function () { return false; });
-    }
-    return Promise.resolve(false);
-  }
 
   // ---------- 下拉刷新 ----------
   function setupPullToRefresh() {
