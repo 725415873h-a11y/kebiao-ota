@@ -45,10 +45,10 @@
     if (cached) {
       try { var c = JSON.parse(cached); state.data = c.data; state.dataTs = c.ts; dataSource = 'cache'; } catch (e) { /* noop */ }
     }
-    // 内嵌快照优先于缓存（refresh.js 生成的 data.js 总是最新的）
+    // 内嵌快照 vs 缓存：谁的时间新用谁（在线抓取/导入后的缓存总是比构建期快照新）
     if (window.EMBEDDED_SCHEDULE && window.EMBEDDED_SCHEDULE.weeks) {
       var snapTs = Date.parse(window.EMBEDDED_SCHEDULE.meta && window.EMBEDDED_SCHEDULE.meta.fetchedAt || '') || 0;
-      if (!state.data || snapTs >= state.dataTs || dataSource !== 'api') {
+      if (!state.data || snapTs > state.dataTs) {
         state.data = window.EMBEDDED_SCHEDULE;
         state.dataTs = snapTs || Date.now();
         dataSource = 'snapshot';
@@ -609,6 +609,98 @@
     return null;
   }
 
+  // ---------- 本周课表快照图（canvas 绘制） ----------
+  function drawWeekSnapshot() {
+    var w = currentWeekObj();
+    if (!w) return null;
+    var W = 1000, timeW = 74, headerH = 150, rowH = 118;
+    var H = headerH + 12 * rowH + 24;
+    var cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    var colW = (W - timeW) / 7;
+    var DAYS2 = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    // 表头
+    ctx.fillStyle = '#1c2733'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('第' + w.week + '周课表', 24, 50);
+    var d0 = w.dates[0], d6 = w.dates[6];
+    ctx.fillStyle = '#6b7a8c'; ctx.font = '22px sans-serif';
+    ctx.fillText((d0 ? d0.date : '') + ' ~ ' + (d6 ? d6.date : ''), 24, 84);
+    ctx.textAlign = 'center';
+    for (var d = 0; d < 7; d++) {
+      var hx = timeW + d * colW;
+      var dt = w.dates[d];
+      ctx.fillStyle = '#6b7a8c'; ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(DAYS2[d], hx + colW / 2, 40);
+      ctx.fillStyle = '#1c2733'; ctx.font = '26px sans-serif';
+      ctx.fillText(dt ? String(dt.day) : '', hx + colW / 2, 76);
+      ctx.strokeStyle = '#e6eaf0'; ctx.beginPath();
+      ctx.moveTo(hx, 0); ctx.lineTo(hx, H); ctx.stroke();
+      if (d < 6) { ctx.beginPath(); ctx.moveTo(timeW + (d + 1) * colW, 0); ctx.lineTo(timeW + (d + 1) * colW, H); ctx.stroke(); }
+    }
+
+    // 节次列 + 横线 + 时段标签
+    ctx.textAlign = 'center';
+    for (var p = 1; p <= 12; p++) {
+      var y = headerH + (p - 1) * rowH;
+      if (p > 1) { ctx.strokeStyle = '#eef1f5'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+      ctx.fillStyle = '#6b7a8c'; ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(String(p), timeW / 2, y + 26);
+      ctx.font = '13px sans-serif';
+      ctx.fillText(periodStart(p) || '', timeW / 2, y + 48);
+      ctx.fillText(periodEnd(p) || '', timeW / 2, y + 66);
+    }
+    var slotY = { '上午': headerH + rowH / 2, '下午': headerH + 5 * rowH, '晚上': headerH + 9 * rowH };
+    ctx.fillStyle = '#98a3b1'; ctx.font = '18px sans-serif';
+    Object.keys(slotY).forEach(function (k) { ctx.fillText(k, timeW / 2, slotY[k]); });
+
+    // 课程（只画每簇主卡，与 App 显示一致）
+    var items = [];
+    for (var dd = 0; dd < 7; dd++) {
+      (w.days[dd] || []).forEach(function (c) {
+        if (c.periods && isVisible(c)) items.push({ d: dd, c: c });
+      });
+    }
+    items.sort(function (a, b) { return a.c.periods[0] - b.c.periods[0]; });
+    var seenSlot = {};
+    items.forEach(function (it) {
+      var c = it.c;
+      if (seenSlot[it.d + '@' + c.periods[0]]) return; // 同格只画第一门
+      seenSlot[it.d + '@' + c.periods[0]] = true;
+      var col = courseColor(c);
+      var x = timeW + it.d * colW + 5;
+      var y = headerH + (c.periods[0] - 1) * rowH + 5;
+      var hh = (c.periods[1] - c.periods[0] + 1) * rowH - 10;
+      var ww = colW - 10;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      var r = 8;
+      ctx.moveTo(x + r, y); ctx.arcTo(x + ww, y, x + ww, y + hh, r);
+      ctx.arcTo(x + ww, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r);
+      ctx.arcTo(x, y, x + ww, y, r); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+      // 名称换行（每行 6 字，最多 3 行）
+      var name = c.name + (c.className ? ' @' + c.className : '');
+      var lines = [];
+      for (var i = 0; i < name.length && lines.length < 3; i += 6) lines.push(name.slice(i, i + 6));
+      var ly = y + hh / 2 - (lines.length - 1) * 12;
+      if (c.location) ly -= 8;
+      ctx.font = 'bold 20px sans-serif';
+      lines.forEach(function (ln, li) { ctx.fillText(ln, x + ww / 2, ly + li * 24); });
+      if (c.location) {
+        ctx.font = '16px sans-serif';
+        ctx.fillText(c.location.replace(/[（）/]/g, ''), x + ww / 2, y + hh - 16);
+      }
+    });
+
+    // 底部生成时间
+    ctx.fillStyle = '#98a3b1'; ctx.font = '18px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('生成时间 ' + todayStr() + ' · 天大福州', 16, H - 12);
+    return cv;
+  }
+
   // ---------- 设置 ----------
   function renderSettings() {
     // 顶部快照：本周课程概览 + 数据时间（便于与腾讯文档原文核对）
@@ -632,6 +724,21 @@
       snap = '<div class="snapline">暂无数据</div>';
     }
     $('docsnap').innerHTML = snap;
+
+    // 打开腾讯文档原文（APK 走系统浏览器；网页版开新标签）
+    $('opendoc2').onclick = function () {
+      var url = 'https://docs.qq.com/sheet/' + state.docId + '?tab=000001';
+      if (window.KebiaoAndroid && window.KebiaoAndroid.openBrowser) window.KebiaoAndroid.openBrowser(url);
+      else window.open(url, '_blank');
+    };
+    // 生成本周课表快照图（canvas 绘制，长按保存）
+    $('weekshot').onclick = function () {
+      var cv = drawWeekSnapshot();
+      if (!cv) { toast('暂无数据'); return; }
+      $('shotimg').src = cv.toDataURL('image/png');
+      $('shotbox').hidden = false;
+      $('shotbox').scrollIntoView({ behavior: 'smooth' });
+    };
 
     // 课程清单（我的课程成员编辑）
     var catalog = {};

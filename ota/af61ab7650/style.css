@@ -235,11 +235,6 @@ body { background: var(--card); }
 .course.hidden-course { opacity: .35; }
 
 /* 今日 */
-#next-card.weekinfo {
-  background: none; color: var(--muted);
-  display: flex; flex-wrap: wrap; gap: 4px 14px;
-  font-size: 13px; padding: 2px 0 10px;
-}
 #next-card {
   background: linear-gradient(135deg, var(--primary), #4c9cff); color: #fff;
   border-radius: var(--radius); padding: 14px; margin-bottom: 10px;
